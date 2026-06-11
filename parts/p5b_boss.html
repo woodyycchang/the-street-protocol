@@ -1,0 +1,260 @@
+
+/* =================== NULLSCROLL // VISUAL DAEMON =================== */
+const boss = (function buildBoss(){
+  const grp = new THREE.Group();
+  grp.position.set(CFG.bossPos.x, 4, CFG.bossPos.z);
+  // the scroll itself: a sheet of pure signal damage
+  const scroll = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 6, 1, 6),
+    new THREE.MeshBasicMaterial({ map: staticTex, side: THREE.DoubleSide }));
+  const rodMat = new THREE.MeshLambertMaterial({ color: 0x191926 });
+  const capMat = new THREE.MeshBasicMaterial({ color: 0xffb454 });
+  function rod(y){
+    const r = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 5.2, 10), rodMat);
+    r.rotation.z = Math.PI/2; r.position.y = y;
+    const c1 = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), capMat); c1.position.set(-2.6, y, 0);
+    const c2 = c1.clone(); c2.position.x = 2.6;
+    grp.add(r, c1, c2);
+  }
+  rod(3.1); rod(-3.1);
+  grp.add(scroll);
+  // tendrils: chains of beads that taste the air
+  const tendrils = [];
+  for(let t=0;t<4;t++){
+    const chain = [];
+    for(let k=0;k<5;k++){
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 6),
+        new THREE.MeshBasicMaterial({ color: k%2 ? 0xff2bd6 : 0x19e3ff }));
+      grp.add(b); chain.push(b);
+    }
+    tendrils.push({ chain, ph: t*1.57 });
+  }
+  const aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex('#ff2bd6'),
+    transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+  aura.scale.set(13, 13, 1);
+  grp.add(aura);
+  grp.visible = false;
+  scene.add(grp);
+  // beam rig, parked at the boss's feet
+  const beamG = new THREE.Group();
+  beamG.position.set(CFG.bossPos.x, 1.4, CFG.bossPos.z);
+  const teleLen = CFG.duelR*2 + 18;
+  const tele = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, teleLen),
+    new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0 }));
+  tele.position.z = -teleLen/2;
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, teleLen),
+    new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false }));
+  beam.position.z = -teleLen/2;
+  beamG.add(tele, beam);
+  scene.add(beamG);
+  return { grp, scroll, tendrils, aura, beamG, tele, beam,
+           alive: false, hp: CFG.bossHpMax, phase: 1,
+           mode: 'cool', modeT: 0, atkCd: 2.0,
+           exposed: false, exposeT: 0, exposeStacks: 0,
+           beamAng: 0, beamHitDone: false, sweepQueue: 0,
+           staticT: 0, y: 4, dead: false };
+})();
+function bossActivate(){
+  boss.alive = true; boss.dead = false;
+  boss.hp = CFG.bossHpMax; boss.phase = 1;
+  boss.mode = 'cool'; boss.atkCd = 1.8;
+  boss.exposed = false; boss.exposeStacks = 0; boss.sweepQueue = 0;
+  boss.grp.visible = true;
+  boss.grp.scale.set(1, 0.04, 1);
+  boss.grp.position.set(CFG.bossPos.x, 4, CFG.bossPos.z);
+  els.bossWrap.classList.add('on');
+}
+function exposeBoss(){
+  boss.exposed = true; boss.exposeT = 3.5; boss.exposeStacks = 0;
+  boss.mode = 'exposed';
+  endBeam();
+  popup('DAEMON EXPOSED', 'big');
+  AudioSys.sfx('expose');
+  glitchSpike(0.2);
+}
+function damageBoss(amt){
+  if(!boss.alive) return;
+  boss.hp = Math.max(0, boss.hp - amt);
+  boss.scroll.material.color.setHex(0xff9090);
+  boss._tintT = 0.08;
+  if(boss.hp <= 0 && !boss.dead) bossDie();
+  else {
+    const frac = boss.hp / CFG.bossHpMax;
+    if(frac <= 0.33 && boss.phase < 3){ boss.phase = 3; popup('SIGNAL FURY', 'warn'); glitchSpike(0.25); }
+    else if(frac <= 0.66 && boss.phase < 2){ boss.phase = 2; popup('SIGNAL RISING', 'warn'); glitchSpike(0.18); }
+  }
+}
+function bossDie(){
+  boss.dead = true; boss.alive = false;
+  endBeam();
+  for(const pr of projs) if(pr.alive && !pr.friendly) killProj(pr);
+  for(const e of enemies) if(e.alive) killEnemy(e, false);
+  // the scroll tears into fragments
+  for(let i=0;i<26;i++){
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(rr(0.4, 1.1), rr(0.4, 1.1)),
+      new THREE.MeshBasicMaterial({ map: staticTex, side: THREE.DoubleSide, transparent: true, opacity: 1 }));
+    m.position.set(CFG.bossPos.x + rr(-2, 2), boss.grp.position.y + rr(-2.5, 2.5), CFG.bossPos.z + rr(-0.4, 0.4));
+    fxG.add(m);
+    frags.push({ m, vx: rr(-5, 5), vy: rr(2, 9), vz: rr(-4, 5),
+                 rx: rr(-5, 5), ry: rr(-5, 5), t: rr(1.4, 2.4) });
+  }
+  boss.grp.visible = false;
+  sparksBurst(CFG.bossPos.x, 3, CFG.bossPos.z, 40, 0xe8f6ff);
+  slowmo(0.25, 1.1);
+  glitchSpike(0.6);
+  flashFx('#e8e8ff', 0.5);
+  AudioSys.sfx('boom');
+}
+function updateFrags(dt){
+  for(const f of frags){
+    f.t -= dt;
+    f.vy -= 9*dt;
+    f.m.position.x += f.vx*dt; f.m.position.y += f.vy*dt; f.m.position.z += f.vz*dt;
+    f.m.rotation.x += f.rx*dt; f.m.rotation.y += f.ry*dt;
+    f.m.material.opacity = clamp(f.t, 0, 1);
+    if(f.t <= 0){ fxG.remove(f.m); f.m.material.dispose(); }
+  }
+  for(let i = frags.length-1; i >= 0; i--) if(frags[i].t <= 0) frags.splice(i, 1);
+}
+function startBeam(){
+  const dx = player.pos.x - CFG.bossPos.x, dz = player.pos.z - CFG.bossPos.z;
+  boss.beamAng = Math.atan2(-dx, -dz);    // group forward is -z
+  boss.beamG.rotation.y = boss.beamAng;
+  boss.mode = 'sweepTele'; boss.modeT = 0.8;
+  boss.beamHitDone = false;
+  boss.tele.material.opacity = 0.7;
+  AudioSys.sfx('expose');
+}
+function endBeam(){
+  boss.tele.material.opacity = 0;
+  boss.beam.material.opacity = 0;
+}
+function beamHitsPlayer(){
+  const dx = player.pos.x - CFG.bossPos.x, dz = player.pos.z - CFG.bossPos.z;
+  const ang = Math.atan2(-dx, -dz);
+  return Math.abs(wrapPI(ang - boss.beamAng)) < 0.11 && Math.hypot(dx, dz) > 1.5;
+}
+function bossAttack(){
+  const ph = boss.phase;
+  const roll = rng();
+  const droneCount = enemies.reduce((n, e)=> n + (e.kind === 'drone' ? 1 : 0), 0);
+  const canSummon = enemies.length < (ph >= 2 ? 6 : 4);
+  if(roll < 0.42){
+    // glyph burst, aimed fan
+    const n = ph === 1 ? 8 : (ph === 2 ? 12 : 16);
+    const dx = player.pos.x - CFG.bossPos.x, dz = player.pos.z - CFG.bossPos.z;
+    const base = Math.atan2(dz, dx);
+    for(let i=0;i<n;i++){
+      const a = ph === 3 ? (i/n)*Math.PI*2 + state.time : base + (i - (n-1)/2)*0.22;
+      spawnProjectile(CFG.bossPos.x, rr(2.2, 4.2), CFG.bossPos.z,
+        Math.cos(a), Math.sin(a), { speed: CFG.projSpeed + ph*1.5, turn: ph === 3 ? 0.7 : CFG.projTurn });
+    }
+    AudioSys.sfx('boom');
+    boss.atkCd = ph === 1 ? rr(2.3, 3.0) : (ph === 2 ? rr(1.8, 2.4) : rr(1.5, 2.0));
+  } else if(roll < 0.74 || !canSummon){
+    startBeam();
+    if(ph === 3) boss.sweepQueue = 1;
+    boss.atkCd = ph === 1 ? rr(2.4, 3.0) : rr(1.8, 2.4);
+  } else {
+    spawnWisp(CFG.duelC.x + rr(-14, 14), CFG.duelC.z + rr(-14, 14));
+    spawnWisp(CFG.duelC.x + rr(-14, 14), CFG.duelC.z + rr(-14, 14));
+    if(ph >= 2 && droneCount < 2) spawnDrone(CFG.duelC.x + rr(-10, 10), CFG.duelC.z + rr(-6, 10));
+    else if(ph === 1 && droneCount < 1) spawnDrone(CFG.duelC.x + rr(-10, 10), CFG.duelC.z + rr(-6, 10));
+    popup('THE SCROLL RECRUITS', 'warn');
+    boss.atkCd = rr(2.6, 3.4);
+  }
+}
+function updateBoss(dt){
+  if(!boss.alive) return;
+  const g = boss.grp;
+  // unfurl + hover
+  g.scale.y = damp(g.scale.y, 1, 4, dt);
+  const wantY = boss.exposed ? 1.7 : 4 + Math.sin(state.time*1.1)*0.4;
+  g.position.y = damp(g.position.y, wantY, boss.exposed ? 6 : 2.2, dt);
+  // face the player
+  const dx = player.pos.x - CFG.bossPos.x, dz = player.pos.z - CFG.bossPos.z;
+  const want = Math.atan2(-dx, -dz);
+  g.rotation.y += wrapPI(want - g.rotation.y) * Math.min(1, dt*2.2);
+  // static churn
+  boss.staticT -= dt;
+  if(boss.staticT <= 0){
+    boss.staticT = 0.07;
+    refreshStatic(0.45 + 0.18*boss.phase + (boss.exposed ? 0.3 : 0));
+  }
+  if(boss._tintT > 0){ boss._tintT -= dt; if(boss._tintT <= 0) boss.scroll.material.color.setHex(0xffffff); }
+  // tendrils
+  for(let t=0;t<boss.tendrils.length;t++){
+    const td = boss.tendrils[t];
+    const baseA = td.ph + state.time*0.8;
+    for(let k=0;k<td.chain.length;k++){
+      const r = 2.6 + k*0.55, a = baseA + Math.sin(state.time*2 + k)*0.3;
+      td.chain[k].position.set(Math.cos(a)*r, Math.sin(state.time*1.6 + k + td.ph)*1.4 - 0.4, Math.sin(a)*r*0.4);
+    }
+  }
+  boss.aura.material.opacity = 0.4 + (boss.exposed ? 0.1 : 0.25)*Math.abs(Math.sin(state.time*3));
+  // FSM
+  if(boss.exposed){
+    boss.exposeT -= dt;
+    if(boss.exposeT <= 0){
+      boss.exposed = false;
+      boss.mode = 'cool'; boss.atkCd = 1.3;
+      // rises with a pulse of glyphs
+      for(let i=0;i<8;i++){
+        const a = (i/8)*Math.PI*2;
+        spawnProjectile(CFG.bossPos.x, 2.2, CFG.bossPos.z, Math.cos(a), Math.sin(a),
+          { speed: 11, turn: 0.5 });
+      }
+      AudioSys.sfx('boom');
+      state.shake = Math.max(state.shake, 0.5);
+    }
+    return;
+  }
+  if(boss.mode === 'sweepTele'){
+    boss.modeT -= dt;
+    boss.tele.material.opacity = 0.4 + Math.abs(Math.sin(state.time*18))*0.4;
+    if(boss.modeT <= 0){
+      boss.mode = 'sweepFire'; boss.modeT = 0.38;
+      boss.tele.material.opacity = 0;
+      boss.beam.material.opacity = 0.85;
+      state.shake = Math.max(state.shake, 0.35);
+      AudioSys.sfx('boom');
+    }
+  } else if(boss.mode === 'sweepFire'){
+    boss.modeT -= dt;
+    boss.beam.material.opacity = 0.5 + Math.abs(Math.sin(state.time*30))*0.4;
+    if(!boss.beamHitDone && !playerDashing() && beamHitsPlayer()){
+      boss.beamHitDone = true;
+      if(damagePlayer(16)) popup('-16 BEAM', 'bad');
+    }
+    if(boss.modeT <= 0){
+      endBeam();
+      if(boss.sweepQueue > 0){ boss.sweepQueue--; startBeam(); }
+      else boss.mode = 'cool';
+    }
+  } else {
+    boss.atkCd -= dt;
+    if(boss.atkCd <= 0) bossAttack();
+  }
+}
+
+/* =================== COMBAT AGGREGATOR =================== */
+function clearCombat(){
+  for(const pr of projs) if(pr.alive) killProj(pr);
+  projs.length = 0;
+  for(const e of enemies) if(e.alive){ e.alive = false; combatG.remove(e.mesh); }
+  enemies.length = 0;
+  for(const s of shards) if(s.alive){ s.alive = false; combatG.remove(s.mesh); }
+  shards.length = 0;
+  for(const f of frags){ fxG.remove(f.m); f.m.material.dispose(); }
+  frags.length = 0;
+  endBeam();
+  boss.alive = false; boss.dead = false; boss.grp.visible = false;
+  els.bossWrap.classList.remove('on');
+}
+function updateCombat(dt){
+  updatePlayerCombat(dt);
+  updateEnemies(dt);
+  updateProjs(dt);
+  updateShards(dt);
+  updateBoss(dt);
+}

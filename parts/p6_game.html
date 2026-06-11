@@ -1,0 +1,327 @@
+
+/* =================== HUD + OVERLAYS =================== */
+let _gSliceT = 0;
+function updateOverlays(dt){
+  // glitch slices
+  const amb = state.phase === 'duel' ? 0.05 + (boss.alive ? boss.phase*0.015 : 0) : 0;
+  state.glitch = Math.max(amb, state.glitch - 1.25*dt);
+  const g = clamp(state.glitch, 0, 1);
+  els.glitch.style.opacity = g < 0.02 ? 0 : Math.min(1, g*1.15);
+  _gSliceT -= dt;
+  if(g > 0.02 && _gSliceT <= 0){
+    _gSliceT = 0.09;
+    const sl = els.glitch.children;
+    for(let i=0;i<sl.length;i++){
+      sl[i].style.top = (rng()*100).toFixed(1) + '%';
+      sl[i].style.height = (1 + rng()*6*g).toFixed(1) + '%';
+      sl[i].style.transform = 'translateX(' + ((rng()*2-1)*30*g).toFixed(1) + 'px)';
+    }
+  }
+  // flash fade
+  if(state.flashT > 0){
+    state.flashT -= dt;
+    if(state.flashT <= 0) els.flash.style.opacity = 0;
+  }
+  // hint timer
+  if(state.hintT > 0){
+    state.hintT -= dt;
+    if(state.hintT <= 0) els.hintToast.classList.remove('on');
+  }
+}
+function showHint(txt, dur){
+  els.hintToast.textContent = txt;
+  els.hintToast.classList.add('on');
+  state.hintT = dur || 3.5;
+}
+function updateHUD(){
+  els.speedNum.textContent = Math.round(bike.mounted ? bike.speed*3.6 : player.walkSpeed*3.6);
+  if(state.phase === 'ride' || state.phase === 'chat'){
+    if(state.freeRide) els.distNum.textContent = 'FREE RIDE — THE STREET IS YOURS';
+    else {
+      const rem = Math.max(0, bike.pos.z - CFG.arriveZ);
+      els.distNum.textContent = 'CLUB ECLIPSE — ' + (rem/1000).toFixed(1) + ' km';
+    }
+  } else if(state.phase === 'duel'){
+    els.distNum.textContent = 'DUEL — HOLD THE RING';
+  } else if(state.phase === 'plaza'){
+    els.distNum.textContent = 'CLUB ECLIPSE — FORECOURT';
+  }
+  els.turboFill.style.transform = 'scaleX(' + (bike.turbo/CFG.turboMax).toFixed(3) + ')';
+  els.hpFill.style.transform = 'scaleX(' + (player.hp/CFG.hpMax).toFixed(3) + ')';
+  els.hpBox.classList.toggle('hurt', player.hurtT > 0 || player.hp <= 25);
+  if(boss.alive || boss.dead){
+    els.bossFill.style.transform = 'scaleX(' + (boss.hp/CFG.bossHpMax).toFixed(3) + ')';
+  }
+  els.comboTag.textContent = '×' + player.combo;
+  els.comboTag.classList.toggle('on', player.combo >= 2 && state.phase === 'duel');
+}
+function updateBarrierFx(dt){
+  const want = barrier.on ? 0.22 + Math.abs(Math.sin(state.time*2.4))*0.1 : 0;
+  barrier.mesh.material.opacity = damp(barrier.mesh.material.opacity, want, 5, dt);
+  barrier.decal.material.opacity = damp(barrier.decal.material.opacity, barrier.on ? 0.55 : 0, 5, dt);
+}
+function updateWorldAmbient(dt, anchorZ){
+  train.z += train.speed * dt;
+  if(train.z < -CFG.streetLen - 60) train.z = 220;
+  train.grp.position.z = train.z;
+  for(const a of adAnims){
+    a.mesh.material.opacity = 0.55 + 0.45*Math.max(0, Math.sin(state.time*a.fl + a.ph));
+  }
+  updateMotes(T3.set(camera.position.x, 0, camera.position.z));
+  updateSpecials(dt);
+}
+
+/* =================== DIALOG =================== */
+const dlg = { sp: null, li: 0 };
+function openDialog(sp){
+  dlg.sp = sp; dlg.li = 0;
+  state.prevPhase = state.phase;
+  setPhase('chat');
+  els.dlgTier.textContent = sp.tierTag;
+  els.dlgName.textContent = sp.name;
+  els.dlgText.textContent = sp.lines[0];
+  els.dlgHint.textContent = sp.lines.length > 1 ? '[E] CONTINUE' : '[E] CLOSE';
+  els.dialog.classList.add('on');
+  els.prompt.classList.remove('on');
+  AudioSys.sfx('talk');
+}
+function advanceDialog(){
+  dlg.li++;
+  if(dlg.li >= dlg.sp.lines.length){ closeDialog(); return; }
+  els.dlgText.textContent = dlg.sp.lines[dlg.li];
+  els.dlgHint.textContent = dlg.li === dlg.sp.lines.length - 1 ? '[E] CLOSE' : '[E] CONTINUE';
+  AudioSys.sfx('talk');
+}
+function closeDialog(){
+  els.dialog.classList.remove('on');
+  const sp = dlg.sp; dlg.sp = null;
+  if(sp && !sp.talked){ sp.talked = true; state.stats.talks++; }
+  if(sp && sp.special === 'courier'){ startIntro(); return; }
+  setPhase(state.prevPhase);
+}
+function updateTalkPrompt(px, pz){
+  const sp = nearestTalk(px, pz, 6);
+  if(sp){
+    els.promptTxt.textContent = 'TALK — ' + sp.name;
+    els.prompt.classList.add('on');
+    if(edge('e')) openDialog(sp);
+  } else {
+    els.prompt.classList.remove('on');
+    edge('e');
+  }
+  return sp;
+}
+
+/* =================== PHASES =================== */
+function setPhase(p){
+  state.phase = p;
+  state.phaseT = 0;
+}
+function updateRide(dt){
+  updateBikePhysics(dt);
+  updateTraffic(dt, bike.pos.z);
+  updateCrowd(dt, bike.pos.z, bike.pos, bike.speed);
+  updateWorldAmbient(dt, bike.pos.z);
+  if(bike.speed < 24) updateTalkPrompt(bike.pos.x, bike.pos.z);
+  else { els.prompt.classList.remove('on'); edge('e'); }
+  if(!state.freeRide && bike.pos.z <= CFG.arriveZ){
+    setPhase('arrive');
+    els.prompt.classList.remove('on');
+    showHint('CLUB ECLIPSE', 2.5);
+    AudioSys.sfx('ui');
+  }
+}
+function updateChat(dt){
+  if(bike.mounted){
+    bike.speed = damp(bike.speed, 0, 2.6, dt);
+    fwdOf(bike.yaw, T1);
+    bike.pos.x += T1.x * bike.speed * dt;
+    bike.pos.z += T1.z * bike.speed * dt;
+    bike.grp.position.copy(bike.pos);
+    const w = bike.speed*dt/0.42; bike.wF.rotation.x -= w; bike.wB.rotation.x -= w;
+    AudioSys.engine(bike.speed, 0);
+    updateTraffic(dt, bike.pos.z);
+    updateCrowd(dt, bike.pos.z, null, 0);
+    updateWorldAmbient(dt, bike.pos.z);
+  } else {
+    avAnim(player.av, dt, 0);
+    updateCrowd(dt, player.pos.z, null, 0);
+    updateWorldAmbient(dt, player.pos.z);
+  }
+  if(edge('e')) advanceDialog();
+}
+function updateArrive(dt){
+  const t = state.phaseT;
+  bike.speed = damp(bike.speed, 0, 3, dt);
+  bike.pos.x = damp(bike.pos.x, CFG.parkPos.x, 2.0, dt);
+  bike.pos.z = damp(bike.pos.z, CFG.parkPos.z, 2.0, dt);
+  bike.yaw = damp(bike.yaw, 0.5, 2.4, dt);
+  bike.lean = damp(bike.lean, 0, 4, dt);
+  bike.grp.position.copy(bike.pos);
+  bike.grp.rotation.y = bike.yaw; bike.grp.rotation.z = bike.lean;
+  AudioSys.engine(bike.speed, 0);
+  updateCrowd(dt, bike.pos.z, null, 0);
+  updateWorldAmbient(dt, bike.pos.z);
+  if(t >= 3.2){
+    mountBike(false);
+    player.pos.set(CFG.parkPos.x - 1.6, 0, CFG.parkPos.z - 1.2);
+    player.yaw = Math.PI*0.9;
+    player.grp.position.copy(player.pos);
+    setPhase('plaza');
+    showHint('ON FOOT NOW · SOMEONE BY THE BIKES WANTS A WORD · E TO TALK', 5);
+  }
+}
+function updatePlaza(dt){
+  playerWalk(dt, null);
+  updateCrowd(dt, player.pos.z, null, 0);
+  updateWorldAmbient(dt, player.pos.z);
+  updateTalkPrompt(player.pos.x, player.pos.z);
+}
+function startIntro(){
+  setPhase('intro');
+  els.prompt.classList.remove('on');
+  state.introFx = 0;
+}
+function updateIntro(dt){
+  const t = state.phaseT;
+  avAnim(player.av, dt, 0);
+  updateWorldAmbient(dt, player.pos.z);
+  // the courier's signal goes bad, then the scroll takes over
+  if(courier.av && !courier.gone){
+    const flick = rng() < 0.3 ? rr(0.2, 1) : 1;
+    for(const m of courier.av.mats) m.opacity = flick;
+  }
+  glitchSpike(dt*0.5);
+  if(t >= 1.5 && !courier.gone){
+    courier.gone = true;
+    courier.grp.visible = false;
+    sparksBurst(courier.grp.position.x, 1.2, courier.grp.position.z, 22, 0xff2bd6);
+    bossActivate();
+    barrier.on = true;
+    AudioSys.setMode('duel');
+    flashFx('#ff2bd6', 0.3);
+    state.shake = Math.max(state.shake, 0.6);
+    popup('NULLSCROLL UNFURLS', 'big');
+  }
+  if(boss.alive) updateBoss(dt);
+  if(t >= 3.4){
+    setPhase('duel');
+    state.stats.duelT0 = state.time;
+    showHint('TAP RIGHT MOUSE AS A GLYPH LANDS — A PARRY SENDS IT BACK', 5);
+  }
+}
+function updateDuel(dt){
+  playerWalk(dt, CFG.bossPos);
+  updateCombat(dt);
+  if(playerDashing() && state.time - (state._lastGhost||0) > 0.06){
+    state._lastGhost = state.time; afterimageBurst();
+  }
+  updateWorldAmbient(dt, player.pos.z);
+  state.stats.duelT = state.time - state.stats.duelT0;
+  if(player.hp <= 35 && !state._lowHpHinted){
+    state._lowHpHinted = true;
+    showHint('SLASH THE WISPS — SOME DROP INTEGRITY SHARDS', 4);
+  }
+  if(boss.dead){
+    setPhase('win');
+    barrier.on = false;
+    AudioSys.setMode('street');
+    state.stats.duelT = state.time - state.stats.duelT0;
+  } else if(player.hp <= 0){
+    setPhase('dead');
+    barrier.on = false;
+    player.grp.visible = false;
+    sparksBurst(player.pos.x, 1.1, player.pos.z, 30, 0x19e3ff);
+    glitchSpike(0.8);
+    AudioSys.sfx('crash');
+  }
+}
+function statsHTML(){
+  const s = state.stats;
+  return '<span>DUEL TIME</span><b>' + s.duelT.toFixed(1) + 's</b>' +
+    '<span>PARRIES</span><b>' + s.parries + '</b>' +
+    '<span>BLOCKS</span><b>' + s.blocks + '</b>' +
+    '<span>SLASHES</span><b>' + s.slashes + '</b>' +
+    '<span>BEST COMBO</span><b>×' + s.maxCombo + '</b>' +
+    '<span>DAMAGE TAKEN</span><b>' + Math.round(s.dmgTaken) + '</b>' +
+    '<span>TOP SPEED</span><b>' + Math.round(s.topSpeed*3.6) + ' km/h</b>' +
+    '<span>AVATARS MET</span><b>' + s.talks + '</b>';
+}
+function gradeOf(){
+  const s = state.stats;
+  const score = 100 - s.dmgTaken*0.55 + s.parries*2.5 - Math.max(0, s.duelT - 75)*0.35;
+  return score >= 100 ? 'S' : score >= 82 ? 'A' : score >= 62 ? 'B' : 'C';
+}
+function updateWin(dt){
+  updateFrags(dt);
+  updateShards(dt);
+  avAnim(player.av, dt, 0);
+  updateWorldAmbient(dt, player.pos.z);
+  if(state.phaseT >= 2.2 && !els.screenWin.classList.contains('on')){
+    els.statsWin.innerHTML = statsHTML();
+    els.gradeTag.textContent = gradeOf();
+    els.screenWin.classList.add('on');
+    els.bossWrap.classList.remove('on');
+    AudioSys.sfx('heal');
+  }
+}
+function updateDead(dt){
+  updateWorldAmbient(dt, player.pos.z);
+  if(state.phaseT >= 1.5 && !els.screenDead.classList.contains('on')){
+    els.statsDead.innerHTML = statsHTML();
+    els.screenDead.classList.add('on');
+    els.bossWrap.classList.remove('on');
+  }
+}
+
+/* =================== CAMERA =================== */
+const camPos = V3(0, 4, 6), camLook = V3(0, 1, -10);
+function updateCamera(dt){
+  let px, py, pz, lx, ly, lz, fovWant = 62;
+  if(state.phase === 'title'){
+    const t = state.time;
+    px = Math.sin(t*0.13)*16; py = 5.5; pz = -40 - (t*2 % 300);
+    lx = 0; ly = 4; lz = pz - 40;
+  } else if(state.phase === 'ride' || (state.phase === 'chat' && bike.mounted)){
+    fwdOf(bike.yaw, T1);
+    const back = 7.4 + bike.speed*0.05;
+    px = bike.pos.x - T1.x*back; py = 3.1 + bike.speed*0.012; pz = bike.pos.z - T1.z*back;
+    lx = bike.pos.x + T1.x*7; ly = 1.3; lz = bike.pos.z + T1.z*7;
+    fovWant = 62 + (bike.boosting ? 15 : bike.speed*0.1);
+  } else if(state.phase === 'arrive'){
+    const a = 2.6 - state.phaseT*0.45;
+    px = bike.pos.x + Math.cos(a)*9; py = 2.6; pz = bike.pos.z + Math.sin(a)*9;
+    lx = bike.pos.x; ly = 1.2; lz = bike.pos.z;
+  } else if(state.phase === 'plaza' || (state.phase === 'chat' && !bike.mounted)){
+    fwdOf(player.yaw, T1);
+    px = player.pos.x - T1.x*6.2; py = 3.2; pz = player.pos.z - T1.z*6.2;
+    lx = player.pos.x; ly = 1.5; lz = player.pos.z;
+  } else if(state.phase === 'intro'){
+    const k = clamp(state.phaseT/3.0, 0, 1);
+    px = lerp(player.pos.x, CFG.bossPos.x + 7, k); py = lerp(3.2, 3.6, k);
+    pz = lerp(player.pos.z + 7, CFG.bossPos.z + 15, k);
+    lx = CFG.bossPos.x; ly = lerp(1.5, 3.4, k); lz = CFG.bossPos.z;
+  } else if(state.phase === 'duel'){
+    // soft lock: stand on the player's shoulder, keep the daemon in frame
+    T1.set(player.pos.x - CFG.bossPos.x, 0, player.pos.z - CFG.bossPos.z).normalize();
+    px = player.pos.x + T1.x*6.6; py = 3.6; pz = player.pos.z + T1.z*6.6;
+    lx = lerp(player.pos.x, CFG.bossPos.x, 0.42);
+    ly = 2.1; lz = lerp(player.pos.z, CFG.bossPos.z, 0.42);
+  } else if(state.phase === 'win'){
+    const a = state.time*0.35;
+    px = CFG.bossPos.x + Math.cos(a)*13; py = 4.5; pz = CFG.bossPos.z + Math.sin(a)*13 + 4;
+    lx = CFG.bossPos.x; ly = 2.5; lz = CFG.bossPos.z;
+  } else { // dead
+    px = player.pos.x; py = 6 + state.phaseT*2; pz = player.pos.z + 5;
+    lx = player.pos.x; ly = 0.8; lz = player.pos.z;
+  }
+  const l = state.phase === 'title' ? 1 : Math.min(1, dt*5.5);
+  camPos.x = lerp(camPos.x, px, l); camPos.y = lerp(camPos.y, py, l); camPos.z = lerp(camPos.z, pz, l);
+  camLook.x = lerp(camLook.x, lx, l); camLook.y = lerp(camLook.y, ly, l); camLook.z = lerp(camLook.z, lz, l);
+  state.shake = Math.max(0, state.shake - dt*1.9);
+  const sh = state.shake*state.shake*0.45;
+  camera.position.set(camPos.x + (rng()*2-1)*sh, camPos.y + (rng()*2-1)*sh, camPos.z + (rng()*2-1)*sh);
+  camera.lookAt(camLook.x, camLook.y, camLook.z);
+  camera.fov = damp(camera.fov, fovWant, 4, dt);
+  camera.updateProjectionMatrix();
+}

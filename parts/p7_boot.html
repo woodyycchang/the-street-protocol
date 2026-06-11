@@ -1,0 +1,246 @@
+
+/* =================== MAIN LOOP =================== */
+const VERSION = '1.0.0';
+const perf = { acc: 0, n: 0, slowStreak: 0, degraded: false };
+function perfTick(ms){
+  perf.acc += ms; perf.n++;
+  if(perf.n >= 60){
+    const avg = perf.acc / perf.n; perf.acc = 0; perf.n = 0;
+    if(avg > 28) perf.slowStreak++; else perf.slowStreak = 0;
+    if(perf.slowStreak >= 4 && !perf.degraded){
+      perf.degraded = true;
+      renderer.setPixelRatio(1);
+      return true;          // degraded this tick
+    }
+  }
+  return false;
+}
+function togglePause(){
+  if(state.phase === 'title') return;
+  state.paused = !state.paused;
+  els.pause.classList.toggle('on', state.paused);
+  if(state.paused) AudioSys.engine(0, 0);
+}
+
+function update(raw){
+  if(state.paused) return;
+  if(state.hitstop > 0){ state.hitstop = Math.max(0, state.hitstop - raw); return; }
+  let dt = raw;
+  if(state.slow.t > 0){
+    dt *= state.slow.scale;
+    state.slow.t = Math.max(0, state.slow.t - raw);
+    if(state.slow.t === 0) state.slow.scale = 1;
+  }
+  state.time += dt; state.phaseT += dt;
+  const ph = state.phase;
+  if(ph === 'title'){
+    const tz = -40 - (state.time*2 % 300);
+    updateTraffic(dt, tz);
+    updateCrowd(dt, tz, null, 0);
+    updateWorldAmbient(dt, tz);
+  }
+  else if(ph === 'ride')   updateRide(dt);
+  else if(ph === 'chat')   updateChat(dt);
+  else if(ph === 'arrive') updateArrive(dt);
+  else if(ph === 'plaza')  updatePlaza(dt);
+  else if(ph === 'intro')  updateIntro(dt);
+  else if(ph === 'duel')   updateDuel(dt);
+  else if(ph === 'win')    updateWin(dt);
+  else if(ph === 'dead')   updateDead(dt);
+  updateGhosts(dt);
+  updateSparks(dt);
+  updateBarrierFx(dt);
+  updateOverlays(dt);
+  updateHUD();
+  AudioSys.update();
+  updateCamera(dt);
+}
+
+let _last = (typeof performance !== 'undefined' ? performance.now() : 0);
+function frame(now){
+  requestAnimationFrame(frame);
+  let raw = (now - _last)/1000; _last = now;
+  if(raw > 0.05) raw = 0.05;
+  if(raw < 0) raw = 0;
+  perfTick(raw * 1000);
+  update(raw);
+  renderer.render(scene, camera);
+}
+
+/* =================== RESET / FREE RIDE =================== */
+function fullReset(){
+  clearCombat();
+  state.stats = freshStats(); state.stats.t0 = state.time;
+  // player on foot
+  player.hp = CFG.hpMax;
+  player.pos.set(CFG.parkPos.x - 1.5, 0, CFG.parkPos.z - 2);
+  player.yaw = 0; player.walkSpeed = 0;
+  player.dashT = -9; player.dashCd = 0; player.guardT = -9; player.guardHeld = false;
+  player.slashT = -9; player.slashHitDone = false;
+  player.combo = 0; player.comboT = 0; player.hurtT = 0;
+  player.grp.position.copy(player.pos); player.grp.rotation.y = 0;
+  player.arc.material.opacity = 0; player.shield.material.opacity = 0;
+  // bike at the top of the street
+  bike.pos.set(8, 0, -4); bike.yaw = 0; bike.speed = 0; bike.lean = 0;
+  bike.turbo = CFG.turboMax; bike.boosting = false; bike.crashCd = 0;
+  bike.tN = 0; bike.tGeo.setDrawRange(0, 0); bike.lastTrail.set(0, 0, 999);
+  bike.grp.position.copy(bike.pos); bike.grp.rotation.set(0, 0, 0);
+  mountBike(true);
+  // barrier down, instantly
+  barrier.on = false;
+  barrier.mesh.material.opacity = 0; barrier.decal.material.opacity = 0;
+  // dialog closed, specials fresh (the courier comes back for another try)
+  els.dialog.classList.remove('on'); dlg.sp = null;
+  for(const sp of specials){
+    sp.talked = false; sp.li = 0;
+    if(sp.gone){ sp.gone = false; sp.grp.visible = true; }
+    if(sp.av) for(const m of sp.av.mats) m.opacity = 1;
+  }
+  // global fx + flags
+  state.freeRide = false; state.prevPhase = 'ride';
+  state.glitch = 0; state.shake = 0; state.hitstop = 0;
+  state.slow.scale = 1; state.slow.t = 0;
+  state.flashT = 0; els.flash.style.opacity = 0;
+  state.hintT = 0; els.hintToast.classList.remove('on');
+  state._lowHpHinted = false; state._lastGhost = 0;
+  els.popups.innerHTML = '';
+  els.prompt.classList.remove('on');
+  els.screenWin.classList.remove('on'); els.screenDead.classList.remove('on');
+  els.pause.classList.remove('on'); state.paused = false;
+  AudioSys.setMode('street');
+  setPhase('ride');
+}
+
+function goFreeRide(){
+  clearCombat();
+  els.screenWin.classList.remove('on'); els.screenDead.classList.remove('on');
+  barrier.on = false;
+  bike.pos.set(8, 0, -4); bike.yaw = 0; bike.speed = 0; bike.lean = 0;
+  bike.turbo = CFG.turboMax; bike.boosting = false; bike.crashCd = 0;
+  bike.tN = 0; bike.tGeo.setDrawRange(0, 0); bike.lastTrail.set(0, 0, 999);
+  bike.grp.position.copy(bike.pos); bike.grp.rotation.set(0, 0, 0);
+  mountBike(true);
+  state.freeRide = true;
+  state.glitch = 0; state.shake = 0;
+  AudioSys.setMode('street');
+  flashFx('#19e3ff', 0.25);
+  setPhase('ride');
+  showHint('THE STREET IS YOURS · NO DESTINATION · M MUTES, P PAUSES', 5);
+}
+
+/* =================== BOOT =================== */
+let _started = false;
+function start(){
+  if(_started) return; _started = true;
+  els.boot.style.display = 'none';
+  els.hud.classList.add('on');
+  AudioSys.unlock();
+  AudioSys.setMode('street');
+  fullReset();
+  showHint('HOLD W TO RIDE · SHIFT FOR TURBO · SLOW DOWN NEAR AVATARS AND TAP E', 6);
+}
+els.btnStart.addEventListener('click', start);
+window.addEventListener('keydown', ev=>{ if(ev.code === 'Enter' && state.phase === 'title') start(); });
+els.btnFree.addEventListener('click', goFreeRide);
+els.btnAgainW.addEventListener('click', fullReset);
+els.btnAgainD.addEventListener('click', fullReset);
+if(('ontouchstart' in window) || (navigator.maxTouchPoints|0) > 0) els.mobileNote.style.display = 'block';
+els.fxToggle.addEventListener('change', ()=>{ state.reduceFx = els.fxToggle.checked; });
+
+/* ---- production hardening ---- */
+console.log('%cSTREET PROTOCOL v' + VERSION, 'color:#19e3ff;background:#05050c;padding:2px 8px;font-family:monospace');
+// auto-pause when the tab loses visibility (never auto-resume)
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden && _started && !state.paused && state.phase !== 'title') togglePause();
+});
+// WebGL context loss: freeze and explain instead of a silent black screen
+function showFault(msg){
+  els.glFaultTxt.textContent = msg;
+  els.glFault.classList.add('on');
+  state.paused = true;
+  els.pause.classList.remove('on');
+  AudioSys.engine(0, 0);
+}
+renderer.domElement.addEventListener('webglcontextlost', ev=>{
+  ev.preventDefault();
+  showFault('The graphics context was lost (the GPU driver reset or the tab was reclaimed). Waiting for it to come back…');
+});
+renderer.domElement.addEventListener('webglcontextrestored', ()=>{
+  els.glFault.classList.remove('on');
+  els.pause.classList.add('on');        // stay paused; P resumes
+});
+// last-resort runtime error overlay
+window.addEventListener('error', ev=>{
+  const m = (ev && ev.message) ? String(ev.message) : 'unknown error';
+  if(els.glFault && !els.glFault.classList.contains('on')) showFault('A runtime fault hit the simulation: ' + m.slice(0, 180));
+});
+
+/* =================== TEST / DEBUG API =================== */
+function snapshot(){
+  const onBike = bike.mounted;
+  const px = onBike ? bike.pos.x : player.pos.x;
+  const pz = onBike ? bike.pos.z : player.pos.z;
+  const eprojs = [];
+  for(const pr of projs){
+    if(!pr.alive || pr.friendly) continue;
+    const dx = player.pos.x - pr.x, dz = player.pos.z - pr.z;
+    const d = Math.hypot(dx, dz);
+    const closing = d > 0.001 ? (pr.vx*dx/d + pr.vz*dz/d) : 0;
+    const tti = closing > 0.1 ? (d - 1.0)/closing : 99;
+    eprojs.push({ x: +pr.x.toFixed(2), z: +pr.z.toFixed(2), dist: +d.toFixed(2), tti: +tti.toFixed(3), front: inFrontCone(pr.x, pr.z, CFG.guardArc) });
+  }
+  eprojs.sort((a, b)=> a.tti - b.tti);
+  let wisps = 0, drones = 0;
+  for(const e of enemies) if(e.alive){ if(e.kind === 'wisp') wisps++; else drones++; }
+  let nt = null;
+  const sp = nearestTalk(px, pz, 8);
+  if(sp){
+    const dx = sp.grp.position.x - px, dz = sp.grp.position.z - pz;
+    nt = { id: sp.id, dist: +Math.hypot(dx, dz).toFixed(2) };
+  }
+  return {
+    phase: state.phase, t: +state.time.toFixed(2), phaseT: +state.phaseT.toFixed(2),
+    speedKmh: Math.round(bike.speed*3.6),
+    bike: { x: +bike.pos.x.toFixed(2), z: +bike.pos.z.toFixed(2), yaw: +bike.yaw.toFixed(3), turbo: +bike.turbo.toFixed(2), mounted: bike.mounted },
+    player: { x: +player.pos.x.toFixed(2), z: +player.pos.z.toFixed(2), hp: Math.round(player.hp), combo: player.combo, dashing: playerDashing() },
+    glitch: +state.glitch.toFixed(2),
+    boss: boss.dead ? { dead: true } : (boss.alive ? { hp: boss.hp, mode: boss.mode, phase: boss.phase, exposed: boss.exposed, stacks: boss.exposeStacks } : null),
+    counts: { wisps, drones, projs: projs.filter(p=>p.alive).length, shards: shards.filter(s=>s.alive).length },
+    enemyProjs: eprojs,
+    beam: boss.alive ? { mode: boss.mode, willHit: beamHitsPlayer() } : null,
+    nearestTalk: nt,
+    barrier: barrier.on,
+    freeRide: state.freeRide,
+    stats: Object.assign({}, state.stats),
+  };
+}
+
+window.GAME = {
+  state, input, config: CFG, els,
+  update, snapshot, reset: fullReset, start, freeRide: goFreeRide,
+  seed: srand,
+  debug: {
+    spawnWisp, spawnDrone,
+    proj: (x, z, dx, dz, opts)=> spawnProjectile(x, 1.3, z, dx, dz, opts || {}),
+    setBossHp: v=>{ boss.hp = v; },
+    setHp: v=>{ player.hp = v; },
+    forceExposed: exposeBoss,
+    activateBoss: bossActivate,
+    glitch: glitchSpike, flash: flashFx,
+    perfTick, perf, version: VERSION,
+    calmBoss: ()=>{ boss.atkCd = 1e9; if(boss.mode === 'sweepTele' || boss.mode === 'sweepFire'){ endBeam(); boss.sweepQueue = 0; boss.mode = 'cool'; } },
+    clearWave: ()=>{ for(const pr of projs) if(pr.alive) killProj(pr); for(const e of enemies) if(e.alive){ e.alive = false; combatG.remove(e.mesh); } },
+    warp: (x, z)=>{
+      if(bike.mounted){ bike.pos.x = x; bike.pos.z = z; bike.grp.position.copy(bike.pos); }
+      else { player.pos.x = x; player.pos.z = z; player.grp.position.copy(player.pos); }
+    },
+    openDialogWith: id=>{ for(const sp of specials) if(sp.id === id){ openDialog(sp); return true; } return false; },
+    refs: { boss, bike, player, enemies, projs, shards, specials, barrier, walkers, traffic },
+  },
+};
+
+if(!HEADLESS) requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

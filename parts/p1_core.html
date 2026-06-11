@@ -1,0 +1,158 @@
+<body>
+<div id="stage"></div>
+
+<div id="boot">
+  <div class="eyebrow">LINK://METAVERSE — THE STREET — NIGHT, ALWAYS</div>
+  <h1 data-t="STREET PROTOCOL">STREET <b>PROTOCOL</b></h1>
+  <div class="lore">
+    The Street: a hundred meters wide, wrapped around a black planet, lit by other people's money.
+    Tonight a virus is loose on it. A scroll of static that crashes the <em>mind</em> behind the avatar.<br>
+    You have a motorcycle, a katana, and a reputation. Ride.
+  </div>
+  <div id="controls">
+    <b>W / S</b><span>throttle · brake</span>
+    <b>A / D</b><span>lean (ride) · strafe (duel)</span>
+    <b>SHIFT</b><span>turbo</span>
+    <b>E</b><span>talk to avatars</span>
+    <b>MOUSE L</b><span>katana slash</span>
+    <b>MOUSE R</b><span>guard — tap as a glyph lands to PARRY</span>
+    <b>SPACE</b><span>dash (brief invulnerability)</span>
+    <b>M / P</b><span>mute · pause</span>
+  </div>
+  <div id="mobileNote">Touch device detected. This build wants a keyboard and a mouse; it will load, but the duel won't be kind.</div>
+  <div id="photoNote">Heads up: this game uses flashing lights and glitch effects. If you are sensitive to flashing imagery, switch on the option below.</div>
+  <label id="fxRow"><input type="checkbox" id="fxToggle"> REDUCE FLASHING &amp; GLITCH</label>
+  <button id="btnStart">JACK IN</button>
+  <div class="credit">AN ORIGINAL HOMAGE TO NEAL STEPHENSON'S “SNOW CRASH” · NO TEXT FROM THE NOVEL APPEARS HERE</div>
+</div>
+
+<div id="hud">
+  <div id="distBox"><div class="tag">DESTINATION</div><div id="distNum">CLUB ECLIPSE — 3.0 km</div></div>
+  <div id="bossWrap"><div id="bossName">NULLSCROLL // VISUAL DAEMON</div><div class="bar"><i id="bossFill"></i></div></div>
+  <div id="speedBox"><div id="speedNum">0</div><div id="speedUnit">KM/H · THE STREET</div></div>
+  <div id="turboBox"><div class="tag">TURBO</div><div class="bar"><i id="turboFill"></i></div></div>
+  <div id="hpBox"><div class="tag">AVATAR INTEGRITY</div><div class="bar"><i id="hpFill"></i></div></div>
+  <div id="comboTag">×0</div>
+  <div id="prompt"><b>[E]</b> <span id="promptTxt">TALK</span></div>
+  <div id="hintToast"></div>
+  <div id="muteTag">M · SOUND ON</div>
+</div>
+
+<div id="dialog">
+  <div id="dlgTier">RENDER TIER</div>
+  <div id="dlgName">NAME</div>
+  <div id="dlgText"></div>
+  <div id="dlgHint">[E] CONTINUE</div>
+</div>
+
+<div id="popups"></div>
+<div id="vig"></div><div id="scan"></div>
+<div id="glitch"><div class="slice"></div><div class="slice"></div><div class="slice"></div></div>
+<div id="flash"></div>
+
+<div id="screenWin" class="screen">
+  <h2>DAEMON PURGED</h2>
+  <div class="line">The scroll tears itself into dead pixels. Somewhere, a few thousand strangers keep partying and never know how close it got. The Street stays loud.</div>
+  <div class="grade" id="gradeTag">A</div>
+  <div class="stats" id="statsWin"></div>
+  <div class="btnRow"><button id="btnFree" class="ghost">FREE RIDE</button><button id="btnAgainW">RUN IT AGAIN</button></div>
+</div>
+
+<div id="screenDead" class="screen">
+  <h2>SIGNAL LOST</h2>
+  <div class="line">Your avatar folds into wireframe and the Street keeps moving without you. Out in the real world, you blink at a goggle screen full of snow. Try again.</div>
+  <div class="stats" id="statsDead"></div>
+  <div class="btnRow"><button id="btnAgainD">REBOOT AVATAR</button></div>
+</div>
+
+<div id="pause" class="screen"><h2 style="color:var(--cyan)">PAUSED</h2><div class="tag">P TO RESUME · M TO MUTE</div></div>
+
+<div id="glFault" class="screen"><h2 style="color:var(--alarm)">SIGNAL FAULT</h2>
+  <div id="glFaultTxt"></div>
+  <div class="tag">IF THIS KEEPS HAPPENING, RELOAD THE PAGE</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script id="game">
+'use strict';
+(function(){
+const THREE = window.THREE;
+if(!THREE){ document.body.innerHTML = '<div style="font-family:monospace;color:#e8e8ff;padding:40px">Could not load the 3D library. The file may be corrupted; please re-download it, then reload the page.</div>'; return; }
+const HEADLESS = !!window.__HEADLESS__;
+
+/* =================== CONFIG =================== */
+const CFG = {
+  streetLen: 3000,           // meters, runs z:0 -> -3000
+  roadHalf: 48,              // drivable half width
+  sideWalkX: 56,             // sidewalk center |x|
+  wallX: 62,                 // first building face |x|
+  bikeMax: 64,               // m/s  (~230 km/h)
+  boostMax: 92,              // m/s  (~331 km/h)
+  accel: 26, brake: 52, coast: 6,
+  steerRate: 1.85, turboMax: 3.0,
+  arriveZ: -2872, parkPos: {x: 6, z: -2918},
+  duelC: {x: 0, z: -2940}, duelR: 24,
+  bossPos: {x: 0, z: -2962},
+  footSpeed: 7.2, dashSpeed: 17, dashTime: 0.24, dashCD: 1.1,
+  slashRange: 3.5, slashArc: 1.35,         // radians half-angle ~77deg
+  parryWin: 0.15, guardArc: 1.45,
+  hpMax: 100, bossHpMax: 120,
+  projSpeed: 15, projTurn: 1.5,
+};
+
+/* =================== UTILS =================== */
+const V3 = (x,y,z)=> new THREE.Vector3(x,y,z);
+const MU = THREE.MathUtils;
+const clamp = (v,a,b)=> v<a?a:(v>b?b:v);
+const lerp = (a,b,t)=> a+(b-a)*t;
+const damp = (a,b,l,dt)=> lerp(a,b,1-Math.exp(-l*dt));
+const wrapPI = (a)=>{ a=(a+Math.PI)%(Math.PI*2); if(a<0)a+=Math.PI*2; return a-Math.PI; };
+// seeded gameplay RNG (deterministic when GAME.seed is used by tests)
+let _rs = 0x9e3779b9;
+function srand(n){ _rs = n>>>0; }
+function rng(){ _rs|=0; _rs = _rs + 0x6D2B79F5 |0; let t = Math.imul(_rs ^ _rs>>>15, 1|_rs); t = t + Math.imul(t ^ t>>>7, 61|t) ^ t; return ((t ^ t>>>14)>>>0)/4294967296; }
+const rr = (a,b)=> a + rng()*(b-a);
+const pick = (arr)=> arr[Math.floor(rng()*arr.length)%arr.length];
+const T1=V3(0,0,0), T2=V3(0,0,0), T3=V3(0,0,0); // scratch vectors
+
+const $ = id => document.getElementById(id);
+const els = {};
+['boot','btnStart','hud','speedNum','distNum','turboFill','hpFill','hpBox','comboTag','bossWrap','bossFill',
+ 'prompt','promptTxt','hintToast','dialog','dlgTier','dlgName','dlgText','dlgHint','popups','flash','glitch',
+ 'screenWin','screenDead','statsWin','statsDead','gradeTag','btnFree','btnAgainW','btnAgainD','pause','muteTag',
+ 'mobileNote','stage','fxToggle','photoNote','glFault','glFaultTxt','bossName'].forEach(k=> els[k]=$(k));
+
+/* =================== INPUT =================== */
+const input = { w:false,a:false,s:false,d:false,shift:false,space:false,e:false,lmb:false,rmb:false,
+                mouseDX:0, _prev:{} };
+function edge(k){ const was = input._prev[k]||false, is = input[k]; input._prev[k]=is; return is && !was; }
+const KEYMAP = { KeyW:'w', ArrowUp:'w', KeyA:'a', ArrowLeft:'a', KeyS:'s', ArrowDown:'s', KeyD:'d', ArrowRight:'d',
+                 ShiftLeft:'shift', ShiftRight:'shift', Space:'space', KeyE:'e' };
+window.addEventListener('keydown', ev=>{
+  if(ev.code==='KeyM' && !ev.repeat) toggleMute();
+  if(ev.code==='KeyP' && !ev.repeat) togglePause();
+  const k = KEYMAP[ev.code]; if(k){ input[k]=true; if(ev.code==='Space'||ev.code.startsWith('Arrow')) ev.preventDefault(); }
+});
+window.addEventListener('keyup', ev=>{ const k = KEYMAP[ev.code]; if(k) input[k]=false; });
+window.addEventListener('mousedown', ev=>{ if(ev.button===0) input.lmb=true; if(ev.button===2) input.rmb=true; });
+window.addEventListener('mouseup', ev=>{ if(ev.button===0) input.lmb=false; if(ev.button===2) input.rmb=false; });
+window.addEventListener('contextmenu', ev=> ev.preventDefault());
+document.addEventListener('mousemove', ev=>{
+  if(document.pointerLockElement) input.mouseDX += (ev.movementX||0);
+});
+
+/* =================== STATE =================== */
+const state = {
+  phase: 'title',        // title|ride|chat|arrive|plaza|intro|duel|win|dead
+  prevPhase: 'ride',
+  freeRide: false,
+  time: 0, phaseT: 0,
+  muted: false, paused: false,
+  glitch: 0,             // 0..1 corruption overlay
+  reduceFx: false,       // photosensitivity-friendly mode
+  shake: 0, hitstop: 0, slow: {scale:1, t:0},
+  hintT: 0,
+  stats: null,
+};
+function freshStats(){ return { t0:0, duelT0:0, duelT:0, parries:0, blocks:0, slashes:0, maxCombo:0, dmgTaken:0, topSpeed:0, talks:0 }; }
+state.stats = freshStats();

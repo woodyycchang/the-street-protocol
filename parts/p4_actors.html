@@ -1,0 +1,441 @@
+
+/* =================== AVATAR FACTORY =================== */
+/* Three render tiers. The whole point of the Street is that you can read
+   somebody's bank account off their polygon count. */
+function makeAvatar(tier, opt){
+  opt = opt || {};
+  const grp = new THREE.Group();
+  const mats = [];
+  const M = (c, extra)=>{ const m = new THREE.MeshLambertMaterial(Object.assign({ color:c, transparent:true, opacity:1 }, extra||{})); mats.push(m); return m; };
+  let torso, head;
+  if(tier === 'terminal'){
+    const gray = 0x9aa0a8;
+    torso = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.78,0.34), M(0x6f757d));
+    head  = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.36,0.3),  M(gray));
+    // cheap wireframe edges, the public-terminal look
+    const eMat = new THREE.LineBasicMaterial({ color:0xe8e8ff, transparent:true, opacity:0.5 }); mats.push(eMat);
+    torso.add(new THREE.LineSegments(new THREE.EdgesGeometry(torso.geometry), eMat));
+    head.add(new THREE.LineSegments(new THREE.EdgesGeometry(head.geometry), eMat));
+  } else if(tier === 'retail'){
+    torso = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.78,0.34), M(0xcfc4ae));
+    head  = new THREE.Mesh(new THREE.SphereGeometry(0.21, 8, 6),  M(0xd8c9a8));
+  } else { // custom
+    const hue = opt.hue !== undefined ? opt.hue : rng();
+    const jacket = new THREE.Color().setHSL(hue, 0.62, 0.5);
+    torso = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.78,0.36), M(jacket.getHex()));
+    head  = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 12),
+      M(new THREE.Color().setHSL((opt.hue||0.6)+0.02, 0.25, 0.62).getHex()));
+  }
+  torso.position.y = 1.05; head.position.y = 1.62;
+  grp.add(torso, head);
+  if(tier === 'custom'){
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.09,0.05),
+      new THREE.MeshBasicMaterial({ color: opt.visor || 0x19e3ff }));
+    visor.position.set(0, 1.64, -0.2); grp.add(visor); mats.push(visor.material);
+    const hair = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.3, 7),
+      M(new THREE.Color().setHSL((opt.hue||0)+0.45, 0.7, 0.6).getHex()));
+    hair.position.set(0, 1.88, 0.03); grp.add(hair);
+  }
+  const limbCol = tier==='terminal' ? 0x7d838c : (tier==='retail' ? 0x6b6357 : 0x1b1b2c);
+  const legG = new THREE.BoxGeometry(0.2,0.7,0.2), armG = new THREE.BoxGeometry(0.15,0.6,0.15);
+  function limb(g, x, y, col){
+    const pivot = new THREE.Group(); pivot.position.set(x, y, 0);
+    const m = new THREE.Mesh(g, M(col)); m.position.y = -(g.parameters.height/2 - 0.02);
+    pivot.add(m); grp.add(pivot); return pivot;
+  }
+  const legL = limb(legG, -0.17, 0.72, limbCol), legR = limb(legG, 0.17, 0.72, limbCol);
+  const armL = limb(armG, -0.42, 1.36, limbCol), armR = limb(armG, 0.42, 1.36, limbCol);
+  const av = { grp, tier, mats, torso, head, legL, legR, armL, armR,
+               ph: rr(0, 6.28), shownPh: 0, tAcc: 0, baseY: 0, op: 1 };
+  return av;
+}
+
+function avAnim(av, dt, speed){
+  const moving = speed > 0.12;
+  av.ph += dt * (moving ? 4 + speed*1.9 : 1.1);
+  let p = av.ph;
+  if(av.tier === 'terminal'){                  // 6 fps animation budget
+    av.tAcc += dt;
+    if(av.tAcc >= 1/6){ av.shownPh = av.ph; av.tAcc = 0; }
+    p = av.shownPh;
+    if(rng() < 0.05) av.op = rr(0.4, 0.95);    // signal trouble
+    else av.op = damp(av.op, 0.92, 5, dt);
+    for(const m of av.mats) m.opacity = av.op;
+  }
+  const amp = moving ? 0.6 : 0.05;
+  const s = Math.sin(p) * amp;
+  av.legL.rotation.x = s;     av.legR.rotation.x = -s;
+  av.armL.rotation.x = -s*0.8; av.armR.rotation.x = s*0.8;
+  av.grp.position.y = av.baseY + (moving ? Math.abs(Math.sin(p))*0.05 : 0);
+}
+
+/* =================== STREET CROWD =================== */
+const walkers = [];
+(function buildCrowd(){
+  for(let i=0;i<26;i++){
+    const r = rng();
+    const tier = r < 0.3 ? 'custom' : (r < 0.74 ? 'retail' : 'terminal');
+    const av = makeAvatar(tier, { hue: rng() });
+    const side = rng() < 0.5 ? -1 : 1;
+    const w = { av, x: side * rr(51, 59), z: -rr(10, 2870), dir: rng()<0.5?1:-1,
+                speed: rr(0.9, 2.1), shimT: 0 };
+    av.grp.position.set(w.x, 0, w.z);
+    av.grp.rotation.y = w.dir > 0 ? Math.PI : 0;
+    crowdG.add(av.grp);
+    walkers.push(w);
+  }
+})();
+function updateCrowd(dt, anchorZ, ridePos, rideSpeed){
+  for(const w of walkers){
+    if(!w.pinned){
+      w.z += w.dir * w.speed * dt;
+      if(w.z > anchorZ + 130){ w.z = anchorZ - rr(200, 340); }
+      else if(w.z < anchorZ - 360){ w.z = anchorZ + rr(60, 120); }
+      w.z = clamp(w.z, -2960, -6);
+      w.av.grp.position.x = w.x; w.av.grp.position.z = w.z;
+    }
+    avAnim(w.av, dt, w.speed);
+    // pass-through ghosts: a bike at speed shimmers right through them
+    if(ridePos && rideSpeed > 6 && w.shimT <= 0){
+      const dx = ridePos.x - w.x, dz = ridePos.z - w.z;
+      if(dx*dx + dz*dz < 7){ w.shimT = 0.6; AudioSys.sfx('talk'); }
+    }
+    if(w.shimT > 0){
+      w.shimT -= dt;
+      const o = 0.3 + Math.abs(Math.sin(state.time*40))*0.5;
+      for(const m of w.av.mats) m.opacity = o;
+      if(w.shimT <= 0) for(const m of w.av.mats) m.opacity = w.av.tier==='terminal' ? w.av.op : 1;
+    }
+  }
+}
+
+/* =================== NAMED AVATARS / DIALOGUE =================== */
+const specials = [];
+function addSpecial(def){
+  let av = null, grp;
+  if(def.kind === 'daemon'){
+    grp = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 0),
+      new THREE.MeshBasicMaterial({ color: 0x19e3ff, wireframe: true }));
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex('#19e3ff'),
+      transparent:true, opacity:0.8, blending:THREE.AdditiveBlending, depthWrite:false }));
+    glow.scale.set(2.4,2.4,1);
+    grp.add(core, glow); grp.userData.core = core;
+  } else {
+    av = makeAvatar(def.tier, { hue: def.hue });
+    grp = av.grp;
+  }
+  grp.position.set(def.x, def.kind==='daemon' ? 1.6 : 0, def.z);
+  if(def.face !== undefined) grp.rotation.y = def.face;
+  crowdG.add(grp);
+  const sp = Object.assign({ av, grp, talked:false, li:0 }, def);
+  specials.push(sp);
+  return sp;
+}
+addSpecial({ id:'archive', kind:'daemon', name:'ARCHIVE://STREET', tierTag:'INFO-DAEMON · PUBLIC SERVICE',
+  x: 44, z: -58, lines: [
+  'Welcome back to the Street. A hundred meters wide, sixty-five thousand kilometers around, and it never closes.',
+  'Everything here is rendered. The road, the ads, me. The only real thing on the Street tonight is attention.',
+  'Advice, free of charge: your bike has a turbo on SHIFT. The meter refills while you behave yourself.',
+  'One more thing. A courier is handing out free samples in front of Club Eclipse. Nothing on this Street is free. Ride careful.' ]});
+addSpecial({ id:'vesper', kind:'avatar', tier:'custom', hue:0.86, name:'VESPER.exe', tierTag:'CUSTOM BUILD · 21,907 POLYS',
+  x: -50, z: -800, face: Math.PI/2, lines: [
+  'Watch the paint. This body took my shop six weeks. The hair alone is four thousand polygons and it renders in any weather.',
+  'You can read anyone out here by their avatar. Custom work means money or talent. Off the rack means neither. Black and white means a coin-fed terminal in a bus station somewhere.',
+  'Headed to Eclipse? The line is long and the list is short. Lucky for you, the trouble out front skips the line.' ]});
+addSpecial({ id:'clones', kind:'avatar', tier:'retail', name:'RETAILBODY №844 (×2)', tierTag:'OFF-THE-RACK · STANDARD WALK CYCLE',
+  x: -50, z: -1100, face: Math.PI/2, lines: [
+  'Yes. We noticed. Same face, same jacket. He bought the RetailBody bundle. I also bought the RetailBody bundle.',
+  'It shipped with three walk cycles and one smile. We are saving up for custom. Everyone is saving up for custom.' ]});
+(function cloneTwin(){ // the second, identical one, standing right next to the first
+  const t = makeAvatar('retail'); t.grp.position.set(-50.9, 0, -1101.2); t.grp.rotation.y = Math.PI/2 + 0.2;
+  crowdG.add(t.grp); walkers.push({ av:t, x:-50.9, z:-1101.2, dir:0, speed:0, shimT:0, pinned:true });
+})();
+addSpecial({ id:'gargoyle', kind:'avatar', tier:'custom', hue:0.55, name:'GARGOYLE.9', tierTag:'WEARABLE RIG · ALWAYS RECORDING',
+  x: 50, z: -1500, face: -Math.PI/2, lines: [
+  'Mind the lenses. I record everything out here and sell the interesting parts. Tonight, everything is interesting.',
+  'Two blocks of my feed went to snow near Eclipse. Avatars walked in sharp and walked out wrong. I am staying right here.' ]});
+addSpecial({ id:'trio', kind:'avatar', tier:'terminal', name:'BOOTH RENTERS (×3)', tierTag:'PUBLIC TERMINAL · B/W · 12 FPS',
+  x: 50, z: -2000, face: -Math.PI/2, lines: [
+  'Don\u2019t l\u2592ugh. The booth eats coins and renders us in grayscale. Still beats not jacking in at all.',
+  'Some guy by the club promised free upgrades. Full color, he said. Roj\u2592n went to look an hour ago. He hasn\u2019t m\u2592ved since.',
+  'If you see Rojan down there... he\u2019s the one standing very, very still.' ]});
+(function trioExtras(){
+  const a = makeAvatar('terminal'), b = makeAvatar('terminal');
+  a.grp.position.set(50.8, 0, -2001.4); a.grp.rotation.y = -Math.PI/2 - 0.25;
+  b.grp.position.set(49.6, 0, -1998.7); b.grp.rotation.y = -Math.PI/2 + 0.3;
+  crowdG.add(a.grp, b.grp);
+  walkers.push({ av:a, x:50.8, z:-2001.4, dir:0, speed:0, shimT:0, pinned:true },
+               { av:b, x:49.6, z:-1998.7, dir:0, speed:0, shimT:0, pinned:true });
+})();
+addSpecial({ id:'doorman', kind:'avatar', tier:'custom', hue:0.08, name:'DOORMAN.SYS', tierTag:'CUSTOM BUILD · CLUB STAFF',
+  x: 0, z: -2984.5, face: Math.PI, lines: [
+  'List is closed. Club is full. Street is free.',
+  'And whatever that courier by the bikes is handing out, the club\u2019s lawyers say we never saw him.' ]});
+addSpecial({ id:'kid', kind:'avatar', tier:'terminal', name:'ROJAN?', tierTag:'PUBLIC TERMINAL · B/W · SIGNAL THIN',
+  x: -9, z: -2930, face: Math.PI*0.75, lines: [
+  'I\u2019m not in the line. I just like the music through the wall. The bass renders fine in grayscale.',
+  'The courier showed me his scroll. I only saw the corner of it. I keep... seeing the corner of it.' ]});
+const courier = addSpecial({ id:'courier', kind:'avatar', tier:'custom', hue:0.0, name:'COURIER://6A', tierTag:'??? · SIGNAL DIRTY',
+  x: 4, z: -2926, face: Math.PI*0.9, special:'courier', lines: [
+  'Hey. Nice bike. Nice reflexes. You look like somebody who appreciates free things.',
+  'It\u2019s a little art piece. A scroll. You look at it, it looks at you, and everybody gets upgraded. One look. That\u2019s all it takes.',
+  'No? Shame. The scroll doesn\u2019t really do \u201cno\u201d.' ]});
+courier.av.visorRef = null;
+(function clubQueue(){ // bodies in line outside the rope
+  for(let i=0;i<7;i++){
+    const r = rng(); const tier = r<0.5 ? 'custom' : (r<0.8 ? 'retail' : 'terminal');
+    const a = makeAvatar(tier, { hue: rng() });
+    a.grp.position.set(-8.5 + i*1.7 + rr(-0.3,0.3), 0, -2981.6 + rr(-0.5,0.5));
+    a.grp.rotation.y = Math.PI + rr(-0.3,0.3);
+    crowdG.add(a.grp);
+    walkers.push({ av:a, x:a.grp.position.x, z:a.grp.position.z, dir:0, speed:0, shimT:0, pinned:true });
+  }
+})();
+function updateSpecials(dt){
+  for(const sp of specials){
+    if(sp.kind === 'daemon'){
+      sp.grp.position.y = 1.6 + Math.sin(state.time*1.7)*0.18;
+      sp.grp.userData.core.rotation.y += dt*0.8;
+      sp.grp.userData.core.rotation.x += dt*0.33;
+    } else if(sp.av){ avAnim(sp.av, dt, 0); }
+  }
+}
+function nearestTalk(px, pz, maxR){
+  let best = null, bd = maxR*maxR;
+  for(const sp of specials){
+    if(sp.gone) continue;
+    const dx = sp.grp.position.x - px, dz = sp.grp.position.z - pz;
+    const d = dx*dx + dz*dz;
+    if(d < bd){ bd = d; best = sp; }
+  }
+  return best;
+}
+
+/* =================== THE BIKE =================== */
+const bike = (function buildBike(){
+  const grp = new THREE.Group();
+  const black = new THREE.MeshLambertMaterial({ color: 0x10101c });
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.36, 2.4), black); frame.position.y = 0.72;
+  const tank = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.3, 0.9),
+    new THREE.MeshLambertMaterial({ color: 0x132a4a, emissive: 0x0a1830 })); tank.position.set(0, 1.0, -0.3);
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.13, 0.8), black); seat.position.set(0, 1.0, 0.55);
+  const dash = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.2),
+    new THREE.MeshBasicMaterial({ color: 0x19e3ff })); dash.position.set(0, 1.12, -0.78);
+  grp.add(frame, tank, seat, dash);
+  function wheel(z){
+    const spin = new THREE.Group(); spin.position.set(0, 0.45, z);
+    const t = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.13, 8, 18),
+      new THREE.MeshLambertMaterial({ color: 0x0b0b12 }));
+    t.rotation.y = Math.PI/2;
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.18, 8),
+      new THREE.MeshBasicMaterial({ color: 0xff2bd6 }));
+    hub.rotation.z = Math.PI/2;
+    spin.add(t, hub); grp.add(spin); return spin;
+  }
+  const wF = wheel(-1.05), wB = wheel(1.05);
+  const glowP = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 3.0),
+    new THREE.MeshBasicMaterial({ color: 0xff2bd6, transparent:true, opacity:0.55,
+      blending: THREE.AdditiveBlending, depthWrite:false }));
+  glowP.rotation.x = -Math.PI/2; glowP.position.y = 0.05; grp.add(glowP);
+  const headLamp = new THREE.PointLight(0x9fd8ff, 1.1, 34); headLamp.position.set(0, 0.95, -1.3); grp.add(headLamp);
+  const underLamp = new THREE.PointLight(0xff2bd6, 0.9, 8); underLamp.position.set(0, 0.35, 0.2); grp.add(underLamp);
+  // rider, a dark custom build with a cyan visor
+  const rider = makeAvatar('custom', { hue: 0.62, visor: 0x19e3ff });
+  rider.torso.material.color.setHex(0x16162a);
+  rider.grp.position.set(0, 0.46, 0.35); rider.grp.scale.set(0.96,0.96,0.96);
+  rider.legL.rotation.x = -1.15; rider.legR.rotation.x = -1.15;
+  rider.armL.rotation.x = -0.85; rider.armR.rotation.x = -0.85;
+  grp.add(rider.grp);
+  // neon trail
+  const MAXT = 90;
+  const tPos = new Float32Array(MAXT*3);
+  const tGeo = new THREE.BufferGeometry(); tGeo.setAttribute('position', new THREE.BufferAttribute(tPos, 3));
+  tGeo.setDrawRange(0, 0);
+  const trail = new THREE.Line(tGeo, new THREE.LineBasicMaterial({ color: 0xff2bd6, transparent:true,
+    opacity:0.75, blending: THREE.AdditiveBlending, depthWrite:false }));
+  trail.frustumCulled = false; scene.add(trail);
+  scene.add(grp);
+  return { grp, wF, wB, rider, trail, tPos, tGeo, tN: 0, lastTrail: V3(0,0,0), MAXT,
+           pos: V3(8, 0, -4), yaw: 0, speed: 0, lean: 0, turbo: CFG.turboMax,
+           boosting: false, crashCd: 0, mounted: true };
+})();
+function fwdOf(yaw, out){ return out.set(-Math.sin(yaw), 0, -Math.cos(yaw)); }
+
+function updateBikePhysics(dt){
+  const b = bike;
+  const thr = input.w ? 1 : 0, brk = input.s ? 1 : 0;
+  b.boosting = !!(input.shift && b.turbo > 0.05 && thr && b.speed > 4);
+  const vmax = b.boosting ? CFG.boostMax : CFG.bikeMax;
+  if(thr) b.speed += (b.boosting ? CFG.accel*1.9 : CFG.accel) * dt * Math.max(0.12, 1.04 - b.speed/vmax);
+  if(brk) b.speed -= CFG.brake * dt;
+  if(!thr && !brk) b.speed -= CFG.coast * dt;
+  if(!b.boosting && b.speed > CFG.bikeMax) b.speed = Math.max(CFG.bikeMax, b.speed - 24*dt);
+  b.speed = clamp(b.speed, 0, CFG.boostMax);
+  if(b.boosting){ b.turbo -= dt; if(b.turbo<=0){ b.turbo=0; } }
+  else b.turbo = Math.min(CFG.turboMax, b.turbo + dt*0.28);
+  const sIn = (input.d?1:0) - (input.a?1:0);
+  if(b.speed > 0.4) b.yaw -= sIn * CFG.steerRate * dt * (0.5 + 0.5*clamp(b.speed/26, 0, 1));
+  b.yaw = clamp(b.yaw, -1.15, 1.15);   // arcade: you ride DOWN the street
+  b.lean = damp(b.lean, -sIn * 0.42 * clamp(b.speed/30, 0, 1), 8, dt);
+  fwdOf(b.yaw, T1);
+  b.pos.x += T1.x * b.speed * dt;
+  b.pos.z += T1.z * b.speed * dt;
+  b.pos.x = clamp(b.pos.x, -59.5, 59.5);
+  b.pos.z = clamp(b.pos.z, -2996, 2);
+  b.crashCd = Math.max(0, b.crashCd - dt);
+  // pylons (the monorail's legs are very real)
+  for(const p of pylons){
+    const dx = b.pos.x - p.x, dz = b.pos.z - p.z, rr2 = (p.r + 0.8);
+    if(dx*dx + dz*dz < rr2*rr2){
+      const d = Math.sqrt(dx*dx+dz*dz) || 0.01;
+      b.pos.x = p.x + dx/d * rr2; b.pos.z = p.z + dz/d * rr2;
+      crashHit(0.6);
+    }
+  }
+  // building faces / club wall
+  for(const c of colliders){
+    if(b.pos.x > c.x0-0.8 && b.pos.x < c.x1+0.8 && b.pos.z > c.z0-0.8 && b.pos.z < c.z1+0.8){
+      const pen = [ b.pos.x-(c.x0-0.8), (c.x1+0.8)-b.pos.x, b.pos.z-(c.z0-0.8), (c.z1+0.8)-b.pos.z ];
+      const i = pen.indexOf(Math.min.apply(null, pen));
+      if(i===0) b.pos.x = c.x0-0.8; else if(i===1) b.pos.x = c.x1+0.8;
+      else if(i===2) b.pos.z = c.z0-0.8; else b.pos.z = c.z1+0.8;
+      crashHit(0.7);
+    }
+  }
+  // traffic is solid; pedestrians are not
+  for(const v of traffic){
+    const dx = b.pos.x - v.grp.position.x, dz = b.pos.z - v.z;
+    if(Math.abs(dz) < 3.1 && Math.abs(dx) < 1.9){
+      b.pos.x = v.grp.position.x + (dx>=0?1:-1)*2.1;
+      crashHit(0.85);
+    }
+  }
+  // visuals
+  b.grp.position.copy(b.pos);
+  b.grp.rotation.y = b.yaw; b.grp.rotation.z = b.lean;
+  const w = b.speed*dt/0.42; b.wF.rotation.x -= w; b.wB.rotation.x -= w;
+  if(state.stats) state.stats.topSpeed = Math.max(state.stats.topSpeed, b.speed);
+  // trail ribbon
+  if(b.pos.distanceToSquared(b.lastTrail) > 0.5 && b.speed > 3){
+    if(b.tN < b.MAXT) b.tN++;
+    for(let i = b.tN-1; i > 0; i--){
+      b.tPos[i*3] = b.tPos[(i-1)*3]; b.tPos[i*3+1] = b.tPos[(i-1)*3+1]; b.tPos[i*3+2] = b.tPos[(i-1)*3+2];
+    }
+    b.tPos[0] = b.pos.x; b.tPos[1] = 0.5; b.tPos[2] = b.pos.z + 1.0;
+    b.lastTrail.copy(b.pos);
+    b.tGeo.setDrawRange(0, b.tN);
+    b.tGeo.attributes.position.needsUpdate = true;
+  }
+  b.trail.material.opacity = clamp(b.speed/40, 0, 1) * (b.boosting ? 0.9 : 0.5);
+  AudioSys.engine(b.speed, thr || b.boosting ? 1 : 0);
+}
+function crashHit(strength){
+  const b = bike;
+  if(b.crashCd > 0) return;
+  b.crashCd = 0.45;
+  b.speed *= 0.35;
+  state.shake = Math.max(state.shake, strength*0.7);
+  glitchSpike(strength*0.25);
+  sparksBurst(b.pos.x, 0.8, b.pos.z, 10, 0xffb454);
+  AudioSys.sfx('crash');
+  if(strength > 0.7) popup('CLIPPED', 'warn');
+}
+
+/* =================== THE PLAYER ON FOOT =================== */
+const player = (function buildPlayer(){
+  const av = makeAvatar('custom', { hue: 0.62, visor: 0x19e3ff });
+  av.torso.material.color.setHex(0x16162a);
+  const grp = av.grp;
+  // katana lives on the right arm
+  const kat = new THREE.Group();
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.26, 8),
+    new THREE.MeshLambertMaterial({ color: 0x2a1a3a }));
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.025, 0.13),
+    new THREE.MeshBasicMaterial({ color: 0xffb454 }));
+  guard.position.y = -0.14;
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.045, 1.05, 0.012),
+    new THREE.MeshBasicMaterial({ color: 0xe9f6ff }));
+  blade.position.y = -0.68;
+  const edge = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 1.05),
+    new THREE.MeshBasicMaterial({ color: 0x19e3ff, transparent:true, opacity:0.35,
+      blending: THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }));
+  edge.position.copy(blade.position);
+  kat.add(handle, guard, blade, edge);
+  kat.position.y = -0.58; kat.rotation.x = 0.35;
+  av.armR.add(kat);
+  // slash arc flash, lives flat in front of the player
+  const arc = new THREE.Mesh(new THREE.RingGeometry(1.1, CFG.slashRange, 26, 1,
+      Math.PI/2 - CFG.slashArc, CFG.slashArc*2),
+    new THREE.MeshBasicMaterial({ color: 0x19e3ff, transparent:true, opacity:0,
+      blending: THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }));
+  arc.rotation.x = -Math.PI/2; arc.position.y = 1.1;
+  grp.add(arc);
+  // guard shimmer plane
+  const shield = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.9),
+    new THREE.MeshBasicMaterial({ color: 0x8fb6ff, transparent:true, opacity:0,
+      blending: THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }));
+  shield.position.set(0, 1.15, -0.75); grp.add(shield);
+  grp.visible = false;
+  scene.add(grp);
+  return { av, grp, kat, arc, shield,
+           pos: V3(CFG.parkPos.x - 1.5, 0, CFG.parkPos.z - 2),
+           yaw: 0, hp: CFG.hpMax,
+           dashT: -9, dashCd: 0, dashDir: V3(0,0,-1),
+           guardHeld: false, guardT: -9, slashT: -9, slashHitDone: false,
+           combo: 0, comboT: 0, hurtT: 0, walkSpeed: 0 };
+})();
+function mountBike(on){
+  bike.mounted = on;
+  bike.rider.grp.visible = on;
+  player.grp.visible = !on;
+  if(!on){ player.grp.position.copy(player.pos); }
+}
+// shared on-foot movement (plaza + duel)
+function playerWalk(dt, lockFaceTo){
+  const p = player;
+  let mx = (input.d?1:0) - (input.a?1:0);
+  let mz = (input.s?1:0) - (input.w?1:0);
+  const dashing = state.time - p.dashT < CFG.dashTime;
+  let sp = CFG.footSpeed;
+  if(dashing){ mx = p.dashDir.x; mz = p.dashDir.z; sp = CFG.dashSpeed; }
+  const len = Math.hypot(mx, mz);
+  if(len > 0.01){
+    mx/=len; mz/=len;
+    p.pos.x += mx * sp * dt; p.pos.z += mz * sp * dt;
+    if(!lockFaceTo && !dashing) p.yaw = Math.atan2(-mx, -mz);
+    p.walkSpeed = sp;
+  } else p.walkSpeed = 0;
+  if(lockFaceTo){
+    const ty = Math.atan2(-(lockFaceTo.x - p.pos.x), -(lockFaceTo.z - p.pos.z));
+    p.yaw += wrapPI(ty - p.yaw) * Math.min(1, dt*10);
+  }
+  // dash start
+  p.dashCd = Math.max(0, p.dashCd - dt);
+  if(edge('space') && p.dashCd <= 0){
+    p.dashT = state.time; p.dashCd = CFG.dashCD;
+    if(len > 0.01) p.dashDir.set(mx, 0, mz); else fwdOf(p.yaw, p.dashDir);
+    AudioSys.sfx('dash');
+    afterimageBurst();
+  }
+  // confinement
+  if(barrier.on){
+    const dx = p.pos.x - CFG.duelC.x, dz = p.pos.z - CFG.duelC.z;
+    const d = Math.hypot(dx, dz), R = CFG.duelR - 0.7;
+    if(d > R){ p.pos.x = CFG.duelC.x + dx/d*R; p.pos.z = CFG.duelC.z + dz/d*R; }
+  } else {
+    p.pos.x = clamp(p.pos.x, -54, 54);
+    p.pos.z = clamp(p.pos.z, -2987.5, -2890);
+    for(const c of colliders){
+      if(p.pos.x > c.x0-0.5 && p.pos.x < c.x1+0.5 && p.pos.z > c.z0-0.5 && p.pos.z < c.z1+0.5){
+        const pen = [ p.pos.x-(c.x0-0.5), (c.x1+0.5)-p.pos.x, p.pos.z-(c.z0-0.5), (c.z1+0.5)-p.pos.z ];
+        const i = pen.indexOf(Math.min.apply(null, pen));
+        if(i===0) p.pos.x = c.x0-0.5; else if(i===1) p.pos.x = c.x1+0.5;
+        else if(i===2) p.pos.z = c.z0-0.5; else p.pos.z = c.z1+0.5;
+      }
+    }
+  }
+  p.grp.position.copy(p.pos);
+  p.grp.rotation.y = p.yaw;
+  avAnim(p.av, dt, dashing ? 10 : p.walkSpeed);
+}

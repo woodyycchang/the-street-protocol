@@ -1,0 +1,408 @@
+
+/* =================== FX PRIMITIVES =================== */
+function popup(txt, cls){
+  if(!els.popups) return;
+  const d = document.createElement('div');
+  d.className = 'pop' + (cls ? ' ' + cls : '');
+  d.textContent = txt;
+  d.style.marginLeft = (Math.random()*120 - 60).toFixed(0) + 'px';
+  d.style.marginTop = (Math.random()*70 - 60).toFixed(0) + 'px';
+  els.popups.appendChild(d);
+  setTimeout(()=>{ if(d.parentNode) d.parentNode.removeChild(d); }, 1300);
+}
+function flashFx(col, op){
+  if(state.reduceFx) op *= 0.22;
+  els.flash.style.background = col || '#ff3b30';
+  els.flash.style.opacity = op !== undefined ? op : 0.35;
+  state.flashT = 0.18;
+}
+function glitchSpike(amt){ if(state.reduceFx) amt *= 0.35; state.glitch = clamp(state.glitch + amt, 0, 1); }
+function hitstop(t){ state.hitstop = Math.max(state.hitstop, t); }
+function slowmo(scale, t){ state.slow.scale = scale; state.slow.t = Math.max(state.slow.t, t); }
+
+// spark particles: one Points cloud, recycled
+const sparks = (function(){
+  const N = 220;
+  const pos = new Float32Array(N*3), col = new Float32Array(N*3);
+  const vel = new Float32Array(N*3), life = new Float32Array(N);
+  for(let i=0;i<N;i++){ pos[i*3+1] = -999; }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const p = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.22, vertexColors: true,
+    transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
+  p.frustumCulled = false; fxG.add(p);
+  return { pos, col, vel, life, N, geo: g, next: 0 };
+})();
+function sparksBurst(x, y, z, n, color){
+  const c = new THREE.Color(color === undefined ? 0xffb454 : color);
+  for(let k=0;k<n;k++){
+    const i = sparks.next; sparks.next = (sparks.next+1) % sparks.N;
+    sparks.pos[i*3]=x; sparks.pos[i*3+1]=y; sparks.pos[i*3+2]=z;
+    sparks.col[i*3]=c.r; sparks.col[i*3+1]=c.g; sparks.col[i*3+2]=c.b;
+    const a = rr(0, Math.PI*2), up = rr(1.5, 5.5), sp = rr(2, 7);
+    sparks.vel[i*3]=Math.cos(a)*sp; sparks.vel[i*3+1]=up; sparks.vel[i*3+2]=Math.sin(a)*sp;
+    sparks.life[i]=rr(0.3, 0.7);
+  }
+}
+function updateSparks(dt){
+  let any = false;
+  for(let i=0;i<sparks.N;i++){
+    if(sparks.life[i] <= 0) continue;
+    any = true;
+    sparks.life[i] -= dt;
+    sparks.vel[i*3+1] -= 14*dt;
+    sparks.pos[i*3]   += sparks.vel[i*3]*dt;
+    sparks.pos[i*3+1] += sparks.vel[i*3+1]*dt;
+    sparks.pos[i*3+2] += sparks.vel[i*3+2]*dt;
+    if(sparks.life[i] <= 0) sparks.pos[i*3+1] = -999;
+  }
+  if(any){ sparks.geo.attributes.position.needsUpdate = true; sparks.geo.attributes.color.needsUpdate = true; }
+}
+// dash afterimages
+const ghosts = [];
+(function(){
+  for(let i=0;i<6;i++){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.62, 1.75, 0.4),
+      new THREE.MeshBasicMaterial({ color: 0x19e3ff, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false }));
+    m.visible = false; fxG.add(m);
+    ghosts.push({ m, t: 0 });
+  }
+})();
+let _ghostNext = 0;
+function afterimageBurst(){
+  const g = ghosts[_ghostNext]; _ghostNext = (_ghostNext+1) % ghosts.length;
+  g.m.position.set(player.pos.x, 0.95, player.pos.z);
+  g.m.rotation.y = player.yaw;
+  g.m.visible = true; g.t = 0.32;
+}
+function updateGhosts(dt){
+  for(const g of ghosts){
+    if(!g.m.visible) continue;
+    g.t -= dt;
+    g.m.material.opacity = Math.max(0, g.t) * 1.4;
+    if(g.t <= 0) g.m.visible = false;
+  }
+}
+
+/* =================== COMBAT POOLS =================== */
+const enemies = [], projs = [], shards = [], frags = [];
+const glyphGeo = new THREE.OctahedronGeometry(0.3, 0);
+const wispGeo = new THREE.TetrahedronGeometry(0.46, 0);
+const shardGeo = new THREE.OctahedronGeometry(0.22, 0);
+
+function spawnProjectile(x, y, z, dirx, dirz, opts){
+  if(projs.length > 70) return null;
+  opts = opts || {};
+  const mat = new THREE.MeshBasicMaterial({ color: opts.friendly ? 0xe8f6ff : 0xff2bd6 });
+  const mesh = new THREE.Mesh(glyphGeo, mat);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(opts.friendly ? '#e8f6ff' : '#ff2bd6'),
+    transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+  glow.scale.set(1.5, 1.5, 1);
+  mesh.add(glow);
+  mesh.position.set(x, y, z);
+  combatG.add(mesh);
+  const sp = opts.speed || CFG.projSpeed;
+  const len = Math.hypot(dirx, dirz) || 1;
+  const pr = { mesh, x, y, z, vx: dirx/len*sp, vz: dirz/len*sp, speed: sp,
+               friendly: !!opts.friendly, homing: opts.homing !== false,
+               turn: opts.turn !== undefined ? opts.turn : CFG.projTurn, t: 0, alive: true };
+  projs.push(pr);
+  return pr;
+}
+function killProj(pr){
+  pr.alive = false;
+  combatG.remove(pr.mesh);
+  pr.mesh.material.dispose();
+}
+function spawnWisp(x, z){
+  if(enemies.length > 14) return null;
+  const mesh = new THREE.Mesh(wispGeo, new THREE.MeshBasicMaterial({ color: 0x19e3ff, wireframe: true }));
+  mesh.position.set(x, 1.1, z);
+  combatG.add(mesh);
+  const e = { kind: 'wisp', mesh, x, z, hp: 1, t: rr(0, 6), alive: true };
+  enemies.push(e);
+  return e;
+}
+function spawnDrone(x, z){
+  if(enemies.length > 14) return null;
+  const av = makeAvatar('terminal');
+  for(const m of av.mats){ if(m.color) m.color.offsetHSL(0, 0.5, -0.05); }
+  av.torso.material.color.setHex(0x7c2050);
+  av.grp.position.set(x, 0, z);
+  combatG.add(av.grp);
+  const e = { kind: 'drone', av, mesh: av.grp, x, z, hp: 3, t: rr(0, 6), alive: true,
+              mode: 'orbit', modeT: rr(1.6, 3.0), lungeX: 0, lungeZ: 0, stunT: 0, orbDir: rng()<0.5?1:-1 };
+  enemies.push(e);
+  return e;
+}
+function killEnemy(e, loud){
+  e.alive = false;
+  sparksBurst(e.x, 1.1, e.z, loud ? 16 : 9, e.kind === 'wisp' ? 0x19e3ff : 0xff2bd6);
+  combatG.remove(e.mesh);
+  if(loud && rng() < 0.32) spawnShard(e.x, e.z);
+  AudioSys.sfx('boom');
+}
+function spawnShard(x, z){
+  const mesh = new THREE.Mesh(shardGeo, new THREE.MeshBasicMaterial({ color: 0x3dffa8 }));
+  mesh.position.set(x, 0.9, z);
+  combatG.add(mesh);
+  shards.push({ mesh, x, z, t: 0, alive: true });
+}
+
+/* =================== PLAYER COMBAT =================== */
+function playerDashing(){ return state.time - player.dashT < CFG.dashTime; }
+function damagePlayer(amt){
+  const p = player;
+  if(playerDashing()) return false;                 // i-frames
+  if(state.time - (p.lastHurt || -9) < 0.25) return false;
+  p.lastHurt = state.time;
+  p.hp = Math.max(0, p.hp - amt);
+  state.stats.dmgTaken += amt;
+  p.hurtT = 0.5;
+  state.shake = Math.max(state.shake, 0.55);
+  glitchSpike(0.32);
+  flashFx('#ff3b30', 0.3);
+  hitstop(0.05);
+  AudioSys.sfx('hit');
+  return true;
+}
+function inFrontCone(srcX, srcZ, halfArc){
+  fwdOf(player.yaw, T1);
+  T2.set(srcX - player.pos.x, 0, srcZ - player.pos.z).normalize();
+  return T1.dot(T2) > Math.cos(halfArc);
+}
+function updatePlayerCombat(dt){
+  const p = player;
+  p.hurtT = Math.max(0, p.hurtT - dt);
+  // guard + parry timing
+  if(edge('rmb')) p.guardT = state.time;
+  p.guardHeld = input.rmb && !playerDashing();
+  p.shield.material.opacity = damp(p.shield.material.opacity, p.guardHeld ? 0.45 : 0, 12, dt);
+  // slash
+  const sinceSlash = state.time - p.slashT;
+  if(edge('lmb') && sinceSlash > 0.3 && !p.guardHeld){
+    if(sinceSlash < 1.0) p.combo++; else p.combo = 1;
+    state.stats.maxCombo = Math.max(state.stats.maxCombo, p.combo);
+    p.slashT = state.time; p.slashHitDone = false;
+    state.stats.slashes++;
+    AudioSys.sfx('slash');
+  }
+  const st = state.time - p.slashT;
+  // slash arc flash
+  p.arc.material.opacity = (st >= 0 && st < 0.22) ? (0.55 - st*2.2) : 0;
+  // pose: combat overrides the walk-cycle arms
+  if(st >= 0 && st < 0.32){
+    const k = st/0.32;
+    p.av.armR.rotation.x = lerp(-2.3, 0.9, Math.min(1, k*1.6));
+    p.av.armR.rotation.z = lerp(-0.5, 0.4, k);
+  } else if(p.guardHeld){
+    p.av.armR.rotation.x = -1.5; p.av.armL.rotation.x = -1.2;
+    p.av.armR.rotation.z = -0.4;
+  } else {
+    p.av.armR.rotation.z = damp(p.av.armR.rotation.z, 0, 10, dt);
+  }
+  // slash active window: connect with everything in the arc
+  if(!p.slashHitDone && st >= 0.06 && st <= 0.2){
+    p.slashHitDone = true;
+    let connected = false;
+    for(const e of enemies){
+      if(!e.alive) continue;
+      const dx = e.x - p.pos.x, dz = e.z - p.pos.z;
+      if(dx*dx + dz*dz > CFG.slashRange*CFG.slashRange) continue;
+      if(!inFrontCone(e.x, e.z, CFG.slashArc)) continue;
+      connected = true;
+      if(e.kind === 'wisp'){ killEnemy(e, true); }
+      else {
+        e.hp -= e.stunT > 0 ? 2 : 1;
+        sparksBurst(e.x, 1.2, e.z, 7, 0xff2bd6);
+        if(e.hp <= 0) killEnemy(e, true);
+      }
+    }
+    for(const pr of projs){
+      if(!pr.alive || pr.friendly) continue;
+      const dx = pr.x - p.pos.x, dz = pr.z - p.pos.z;
+      if(dx*dx + dz*dz > CFG.slashRange*CFG.slashRange) continue;
+      if(!inFrontCone(pr.x, pr.z, CFG.slashArc)) continue;
+      connected = true;
+      sparksBurst(pr.x, pr.y, pr.z, 6, 0xe8f6ff);
+      killProj(pr);
+    }
+    if(boss.alive && boss.exposed){
+      const dx = CFG.bossPos.x - p.pos.x, dz = CFG.bossPos.z - p.pos.z;
+      if(dx*dx + dz*dz < 4.4*4.4 && inFrontCone(CFG.bossPos.x, CFG.bossPos.z, CFG.slashArc)){
+        connected = true;
+        damageBoss(8);
+        sparksBurst(CFG.bossPos.x, 1.8, CFG.bossPos.z, 12, 0xe8f6ff);
+        if(p.combo >= 3) popup('×' + p.combo, 'big');
+      }
+    } else if(boss.alive){
+      const dx = CFG.bossPos.x - p.pos.x, dz = CFG.bossPos.z - p.pos.z;
+      if(dx*dx + dz*dz < 4.4*4.4 && inFrontCone(CFG.bossPos.x, CFG.bossPos.z, CFG.slashArc)){
+        connected = true; damageBoss(1);
+        sparksBurst(CFG.bossPos.x, 2.2, CFG.bossPos.z, 4, 0x8fb6ff);
+      }
+    }
+    if(connected){ AudioSys.sfx('clash'); hitstop(0.03); }
+  }
+  if(state.time - p.slashT > 1.4) p.combo = 0;
+}
+
+/* =================== ENEMY + PROJECTILE UPDATE =================== */
+function updateEnemies(dt){
+  const p = player;
+  for(const e of enemies){
+    if(!e.alive) continue;
+    e.t += dt;
+    if(e.kind === 'wisp'){
+      const dx = p.pos.x - e.x, dz = p.pos.z - e.z;
+      const d = Math.hypot(dx, dz) || 0.01;
+      const wob = Math.sin(e.t*5)*1.4;
+      e.x += (dx/d*5.4 + (-dz/d)*wob) * dt;
+      e.z += (dz/d*5.4 + ( dx/d)*wob) * dt;
+      e.mesh.position.set(e.x, 1.1 + Math.sin(e.t*7)*0.2, e.z);
+      e.mesh.rotation.y += dt*4; e.mesh.rotation.x += dt*2.4;
+      if(d < 0.95){ if(damagePlayer(8)) popup('-8', 'bad'); killEnemy(e, false); }
+    } else { // drone
+      if(e.stunT > 0){
+        e.stunT -= dt;
+        e.av.grp.rotation.z = Math.sin(e.t*30)*0.12;
+        if(e.stunT <= 0) { e.av.grp.rotation.z = 0; e.mode = 'orbit'; e.modeT = rr(1.4, 2.4); }
+      } else if(e.mode === 'orbit'){
+        const dx = e.x - p.pos.x, dz = e.z - p.pos.z;
+        const d = Math.hypot(dx, dz) || 0.01;
+        const want = 7.2;
+        const tx = dx/d, tz = dz/d;
+        e.x += ((want - d)*tx*1.6 + (-tz)*e.orbDir*3.4) * dt;
+        e.z += ((want - d)*tz*1.6 + ( tx)*e.orbDir*3.4) * dt;
+        e.modeT -= dt;
+        if(e.modeT <= 0){ e.mode = 'tele'; e.modeT = 0.5; AudioSys.sfx('expose'); }
+      } else if(e.mode === 'tele'){
+        e.modeT -= dt;
+        e.av.grp.position.y = Math.abs(Math.sin(e.t*26))*0.12;
+        if(e.modeT <= 0){
+          e.mode = 'lunge'; e.modeT = 0.5;
+          const dx = p.pos.x - e.x, dz = p.pos.z - e.z, d = Math.hypot(dx, dz)||0.01;
+          e.lungeX = dx/d; e.lungeZ = dz/d;
+        }
+      } else if(e.mode === 'lunge'){
+        e.modeT -= dt;
+        e.x += e.lungeX*22*dt; e.z += e.lungeZ*22*dt;
+        const dx = p.pos.x - e.x, dz = p.pos.z - e.z;
+        if(dx*dx + dz*dz < 1.25 && !playerDashing()){
+          if(p.guardHeld && inFrontCone(e.x, e.z, CFG.guardArc)){
+            if(state.time - p.guardT <= CFG.parryWin){
+              e.stunT = 2.2; e.mode = 'stun';
+              state.stats.parries++;
+              hitstop(0.07); slowmo(0.35, 0.22);
+              popup('PARRY!', 'big'); AudioSys.sfx('parry');
+              sparksBurst(e.x, 1.3, e.z, 14, 0xe8f6ff);
+            } else {
+              state.stats.blocks++;
+              if(damagePlayer(4)) popup('BLOCKED -4', 'warn');
+              AudioSys.sfx('clash');
+              e.mode = 'orbit'; e.modeT = rr(1.6, 2.6);
+            }
+          } else {
+            if(damagePlayer(12)) popup('-12', 'bad');
+            e.mode = 'orbit'; e.modeT = rr(1.6, 2.6);
+          }
+        }
+        if(e.modeT <= 0 && e.mode === 'lunge'){ e.mode = 'orbit'; e.modeT = rr(1.6, 2.8); }
+      }
+      // ring confinement for drones
+      const bx = e.x - CFG.duelC.x, bz = e.z - CFG.duelC.z, bd = Math.hypot(bx, bz);
+      if(bd > CFG.duelR - 0.5){ e.x = CFG.duelC.x + bx/bd*(CFG.duelR-0.5); e.z = CFG.duelC.z + bz/bd*(CFG.duelR-0.5); }
+      e.av.grp.position.x = e.x; e.av.grp.position.z = e.z;
+      e.av.grp.rotation.y = Math.atan2(-(p.pos.x - e.x), -(p.pos.z - e.z));
+      avAnim(e.av, dt, e.mode === 'lunge' ? 8 : 2);
+    }
+  }
+  for(let i = enemies.length-1; i >= 0; i--) if(!enemies[i].alive) enemies.splice(i, 1);
+}
+function updateProjs(dt){
+  const p = player;
+  for(const pr of projs){
+    if(!pr.alive) continue;
+    pr.t += dt;
+    if(pr.homing){
+      let tx, tz;
+      if(pr.friendly){ tx = CFG.bossPos.x - pr.x; tz = CFG.bossPos.z - pr.z; }
+      else { tx = p.pos.x - pr.x; tz = p.pos.z - pr.z; }
+      const cur = Math.atan2(pr.vz, pr.vx), want = Math.atan2(tz, tx);
+      let dA = wrapPI(want - cur);
+      dA = clamp(dA, -pr.turn*dt, pr.turn*dt);
+      const a = cur + dA;
+      pr.vx = Math.cos(a)*pr.speed; pr.vz = Math.sin(a)*pr.speed;
+    }
+    pr.x += pr.vx*dt; pr.z += pr.vz*dt;
+    pr.mesh.position.set(pr.x, pr.y, pr.z);
+    pr.mesh.rotation.y += dt*6; pr.mesh.rotation.x += dt*3;
+    if(pr.friendly){
+      const dx = CFG.bossPos.x - pr.x, dz = CFG.bossPos.z - pr.z;
+      if(boss.alive && dx*dx + dz*dz < 2.6*2.6){
+        damageBoss(11);
+        boss.exposeStacks++;
+        sparksBurst(pr.x, pr.y, pr.z, 14, 0xe8f6ff);
+        glitchSpike(0.12);
+        AudioSys.sfx('boom');
+        killProj(pr);
+        if(!boss.exposed && boss.exposeStacks >= 3) exposeBoss();
+        continue;
+      }
+    } else {
+      const dx = p.pos.x - pr.x, dz = p.pos.z - pr.z;
+      const dy = 1.1 - pr.y;
+      if(dx*dx + dz*dz + dy*dy*0.4 < 1.15){
+        if(playerDashing()){ /* sails through the afterimage */ }
+        else if(p.guardHeld && inFrontCone(pr.x, pr.z, CFG.guardArc)){
+          if(state.time - p.guardT <= CFG.parryWin){
+            // PARRY: send it back, faster, and white-hot
+            pr.friendly = true; pr.speed = pr.speed*1.6; pr.turn = 4;
+            pr.mesh.material.color.setHex(0xe8f6ff);
+            const dxb = CFG.bossPos.x - pr.x, dzb = CFG.bossPos.z - pr.z, db = Math.hypot(dxb, dzb)||1;
+            pr.vx = dxb/db*pr.speed; pr.vz = dzb/db*pr.speed;
+            state.stats.parries++;
+            hitstop(0.08); slowmo(0.3, 0.25);
+            popup('PARRY!', 'big'); AudioSys.sfx('parry');
+            sparksBurst(pr.x, pr.y, pr.z, 12, 0x19e3ff);
+            continue;
+          } else {
+            state.stats.blocks++;
+            AudioSys.sfx('clash');
+            sparksBurst(pr.x, pr.y, pr.z, 7, 0x8fb6ff);
+            killProj(pr);
+            continue;
+          }
+        } else {
+          if(damagePlayer(9)) popup('-9', 'bad');
+          killProj(pr);
+          continue;
+        }
+      }
+    }
+    const cx = pr.x - CFG.duelC.x, cz = pr.z - CFG.duelC.z;
+    if(pr.t > 7 || cx*cx + cz*cz > (CFG.duelR+34)*(CFG.duelR+34)) killProj(pr);
+  }
+  for(let i = projs.length-1; i >= 0; i--) if(!projs[i].alive) projs.splice(i, 1);
+}
+function updateShards(dt){
+  const p = player;
+  for(const s of shards){
+    if(!s.alive) continue;
+    s.t += dt;
+    const dx = p.pos.x - s.x, dz = p.pos.z - s.z, d = Math.hypot(dx, dz);
+    if(d < 4){ s.x += dx/d*8*dt; s.z += dz/d*8*dt; }
+    s.mesh.position.set(s.x, 0.9 + Math.sin(s.t*4)*0.15, s.z);
+    s.mesh.rotation.y += dt*3;
+    if(d < 1.0){
+      s.alive = false; combatG.remove(s.mesh);
+      player.hp = Math.min(CFG.hpMax, player.hp + 6);
+      popup('+6 INTEGRITY', 'pop');
+      AudioSys.sfx('heal');
+    }
+    if(s.t > 12){ s.alive = false; combatG.remove(s.mesh); }
+  }
+  for(let i = shards.length-1; i >= 0; i--) if(!shards[i].alive) shards.splice(i, 1);
+}

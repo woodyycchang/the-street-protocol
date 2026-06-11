@@ -1,0 +1,19 @@
+{
+  "name": "the-street-protocol",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A single-file 3D browser action game. Ride the Street, meet the avatars, duel a visual virus.",
+  "repository": "github:woodyycchang/the-street-protocol",
+  "scripts": {
+    "build": "python3 build.py",
+    "test": "node test/play.js",
+    "test:e2e": "node test/e2e_honest.js",
+    "test:prod": "node test/prod.js",
+    "test:sweep": "node test/sweep.js",
+    "test:all": "node test/play.js && node test/e2e_honest.js && node test/prod.js"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "three": "0.128.0"
+  }
+}
