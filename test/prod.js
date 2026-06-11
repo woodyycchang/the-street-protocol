@@ -87,8 +87,11 @@ console.log('== text: research-backed minimalism ==');
 // scope checks to the title-screen markup, not the embedded vendor lib
 // (three.js is full of "Matrix4" etc., unrelated to the film)
 const bootHtml = html.slice(0, html.indexOf('<script id="vendor-three">'));
-// startup screen no longer names any source work (user decision)
-ok(!/SNOW CRASH|STEPHENSON|GIBSON|NEUROMANCER|WACHOWSKI/i.test(bootHtml), 'no source-work credit on the title screen');
+// each reference work is named, and named FIRST (before the title)
+ok(/NEUROMANCER/.test(bootHtml) && /SNOW CRASH/.test(bootHtml) && /THE MATRIX/.test(bootHtml) && /GHOST IN THE SHELL/.test(bootHtml),
+   'all four reference works named on the title screen');
+ok(bootHtml.indexOf('NEUROMANCER') < bootHtml.indexOf('<h1'), 'references appear before the title');
+ok(/NO TEXT FROM THESE WORKS/.test(bootHtml), 'originality line present');
 // marketese stripped from the lore line (NN/G: objective beats promotional)
 ok(!/sixty-five thousand|other people's money/i.test(bootHtml), 'promotional lore copy removed');
 // courier keeps the refusal beat in original words, no film quotes (apostrophe may be a unicode char)

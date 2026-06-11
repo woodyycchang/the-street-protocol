@@ -52,4 +52,4 @@ The rendering layer is the one thing headless testing can't see, so visuals were
 
 v1.0.0. Game code is copyright © 2026 Yung-Chia Chang, all rights reserved for now; a source license may follow. three.js is MIT (see `NOTICE`).
 
-This is an original homage to 1990s cyberpunk metaverse fiction. No text from any novel appears here; every name and line of dialogue is original.
+An original homage to Neuromancer, Snow Crash, The Matrix, and Ghost in the Shell. No text from these works appears here; every name and line of dialogue is original.
