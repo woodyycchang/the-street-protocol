@@ -146,6 +146,12 @@ els.btnAgainW.addEventListener('click', fullReset);
 els.btnAgainD.addEventListener('click', fullReset);
 if(('ontouchstart' in window) || (navigator.maxTouchPoints|0) > 0) els.mobileNote.style.display = 'block';
 els.fxToggle.addEventListener('change', ()=>{ state.reduceFx = els.fxToggle.checked; });
+// honor the OS-level reduced-motion preference: zero-UI protection (WCAG 2.3.1)
+try{
+  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    state.reduceFx = true; els.fxToggle.checked = true;
+  }
+}catch(e){}
 
 /* ---- production hardening ---- */
 console.log('%cSTREET PROTOCOL v' + VERSION, 'color:#19e3ff;background:#05050c;padding:2px 8px;font-family:monospace');

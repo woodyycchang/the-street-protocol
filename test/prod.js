@@ -30,6 +30,20 @@ ok(Math.abs(G.state.glitch - 0.35) < 1e-9, 'glitch spikes are damped to 35%', G.
 cb.checked = false; cb.dispatchEvent(new W.Event('change', { bubbles: true }));
 G.state.glitch = 0; G.debug.glitch(1.0);
 ok(G.state.glitch === 1, 'full glitch when the mode is off', G.state.glitch);
+
+console.log('== reduce-flash: simplicity pass ==');
+// the wordy warning sentence is gone; the one-line control remains (minimalism floor)
+ok(!document.getElementById('photoNote'), 'photo-warning sentence removed');
+ok(!!document.getElementById('fxToggle'), 'reduce-flashing control kept');
+// OS-level prefers-reduced-motion auto-enables the mode with zero UI
+{
+  const fresh = boot({ preBoot: w => {
+    w.matchMedia = q => ({ matches: /prefers-reduced-motion:\s*reduce/.test(q),
+                           addListener(){}, removeListener(){}, addEventListener(){}, removeEventListener(){} });
+  }});
+  ok(fresh.GAME.state.reduceFx === true, 'prefers-reduced-motion auto-enables reduce-flash');
+  ok(fresh.window.document.getElementById('fxToggle').checked === true, 'checkbox reflects the auto-enabled state');
+}
 G.state.glitch = 0;
 
 console.log('== auto-pause on tab blur ==');

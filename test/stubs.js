@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const { JSDOM } = require('jsdom');
 
-module.exports = function bootGame(){
+module.exports = function bootGame(opts){
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const dom = new JSDOM(html.replace(/<script src="https:[^"]*"><\/script>/, ''), {
     pretendToBeVisual: true, runScripts: 'outside-only', url: 'https://localhost/',
@@ -39,6 +39,7 @@ module.exports = function bootGame(){
 
   const m = html.match(/<script id="game">([\s\S]*?)<\/script>/);
   if (!m) throw new Error('game script not found in index.html');
+  if (opts && typeof opts.preBoot === 'function') opts.preBoot(window);   // e.g. stub matchMedia before the game script runs
   const run = new Function('window', 'document', 'navigator', 'performance', 'requestAnimationFrame', m[1]);
   run(window, document, window.navigator, (typeof performance !== 'undefined' ? performance : { now: () => Date.now() }), () => {});
 

@@ -61,7 +61,6 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 #mobileNote{display:none;font-size:11px;color:var(--amber);max-width:420px;line-height:1.7}
 #fxRow{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.15em;color:rgba(232,232,255,.6);cursor:pointer;user-select:none}
 #fxRow input{accent-color:var(--cyan);width:14px;height:14px;cursor:pointer}
-#photoNote{font-size:10px;color:rgba(232,232,255,.4);max-width:460px;line-height:1.6}
 #glFaultTxt{font-size:12px;color:var(--amber);max-width:520px;line-height:1.8;word-break:break-word}
 
 /* ---------- HUD ---------- */
@@ -165,7 +164,6 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
     <b>M / P</b><span>mute · pause</span>
   </div>
   <div id="mobileNote">Built for keyboard and mouse. It runs on touch, but the duel will fight you.</div>
-  <div id="photoNote">Flashing lights and glitch effects ahead. Sensitive to flashing? Switch this on.</div>
   <label id="fxRow"><input type="checkbox" id="fxToggle"> REDUCE FLASHING</label>
   <button id="btnStart">JACK IN</button>
   <div class="credit">AN ORIGINAL GAME · NO TEXT FROM THESE WORKS APPEARS HERE</div>
@@ -273,7 +271,7 @@ const els = {};
 ['boot','btnStart','hud','speedNum','distNum','turboFill','hpFill','hpBox','comboTag','bossWrap','bossFill',
  'prompt','promptTxt','hintToast','dialog','dlgTier','dlgName','dlgText','dlgHint','popups','flash','glitch',
  'screenWin','screenDead','statsWin','statsDead','gradeTag','btnFree','btnAgainW','btnAgainD','pause','muteTag',
- 'mobileNote','stage','fxToggle','photoNote','glFault','glFaultTxt','bossName'].forEach(k=> els[k]=$(k));
+ 'mobileNote','stage','fxToggle','glFault','glFaultTxt','bossName'].forEach(k=> els[k]=$(k));
 
 /* =================== INPUT =================== */
 const input = { w:false,a:false,s:false,d:false,shift:false,space:false,e:false,lmb:false,rmb:false,
@@ -2336,6 +2334,12 @@ els.btnAgainW.addEventListener('click', fullReset);
 els.btnAgainD.addEventListener('click', fullReset);
 if(('ontouchstart' in window) || (navigator.maxTouchPoints|0) > 0) els.mobileNote.style.display = 'block';
 els.fxToggle.addEventListener('change', ()=>{ state.reduceFx = els.fxToggle.checked; });
+// honor the OS-level reduced-motion preference: zero-UI protection (WCAG 2.3.1)
+try{
+  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    state.reduceFx = true; els.fxToggle.checked = true;
+  }
+}catch(e){}
 
 /* ---- production hardening ---- */
 console.log('%cSTREET PROTOCOL v' + VERSION, 'color:#19e3ff;background:#05050c;padding:2px 8px;font-family:monospace');

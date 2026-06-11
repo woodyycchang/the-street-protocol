@@ -19,7 +19,6 @@
     <b>M / P</b><span>mute · pause</span>
   </div>
   <div id="mobileNote">Built for keyboard and mouse. It runs on touch, but the duel will fight you.</div>
-  <div id="photoNote">Flashing lights and glitch effects ahead. Sensitive to flashing? Switch this on.</div>
   <label id="fxRow"><input type="checkbox" id="fxToggle"> REDUCE FLASHING</label>
   <button id="btnStart">JACK IN</button>
   <div class="credit">AN ORIGINAL GAME · NO TEXT FROM THESE WORKS APPEARS HERE</div>
@@ -119,7 +118,7 @@ const els = {};
 ['boot','btnStart','hud','speedNum','distNum','turboFill','hpFill','hpBox','comboTag','bossWrap','bossFill',
  'prompt','promptTxt','hintToast','dialog','dlgTier','dlgName','dlgText','dlgHint','popups','flash','glitch',
  'screenWin','screenDead','statsWin','statsDead','gradeTag','btnFree','btnAgainW','btnAgainD','pause','muteTag',
- 'mobileNote','stage','fxToggle','photoNote','glFault','glFaultTxt','bossName'].forEach(k=> els[k]=$(k));
+ 'mobileNote','stage','fxToggle','glFault','glFaultTxt','bossName'].forEach(k=> els[k]=$(k));
 
 /* =================== INPUT =================== */
 const input = { w:false,a:false,s:false,d:false,shift:false,space:false,e:false,lmb:false,rmb:false,
