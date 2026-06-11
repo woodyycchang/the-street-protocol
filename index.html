@@ -380,7 +380,7 @@ const AudioSys = (function(){
       const sp = clamp(speed,0,CFG.boostMax);
       engOsc.frequency.value = 42 + sp*1.7; engSub.frequency.value = 21 + sp*0.85;
       engFilt.frequency.value = 160 + sp*27 + throttle*200;
-      engG.gain.value = state.muted?0 : clamp(0.006 + sp*0.00035 + throttle*0.004, 0, 0.022);
+      engG.gain.value = state.muted?0 : clamp(0.008 + sp*0.0005 + throttle*0.0055, 0, 0.031);
       windG.gain.value = state.muted?0 : clamp(sp*sp*0.000005, 0, 0.028);
       windFilt.frequency.value = 250 + sp*22; },
     sfx(name){ if(!ctx || state.muted) return; const t = ctx.currentTime;
