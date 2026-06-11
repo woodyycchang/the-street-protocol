@@ -2,28 +2,26 @@
 <div id="stage"></div>
 
 <div id="boot">
-  <div class="eyebrow">LINK://METAVERSE — THE STREET — NIGHT, ALWAYS</div>
+  <div class="eyebrow">THE STREET — NIGHT, ALWAYS</div>
   <h1 data-t="STREET PROTOCOL">STREET <b>PROTOCOL</b></h1>
   <div class="lore">
-    The Street: a hundred meters wide, wrapped around a black planet, lit by other people's money.
-    Tonight a virus is loose on it. A scroll of static that crashes the <em>mind</em> behind the avatar.<br>
-    You have a motorcycle, a katana, and a reputation. Ride.
+    A virus is loose on the Street. It rides in as a scroll of static and crashes the mind behind the avatar.<br>
+    You have a bike and a blade.
   </div>
   <div id="controls">
     <b>W / S</b><span>throttle · brake</span>
-    <b>A / D</b><span>lean (ride) · strafe (duel)</span>
+    <b>A / D</b><span>lean · strafe</span>
     <b>SHIFT</b><span>turbo</span>
-    <b>E</b><span>talk to avatars</span>
-    <b>MOUSE L</b><span>katana slash</span>
-    <b>MOUSE R</b><span>guard — tap as a glyph lands to PARRY</span>
-    <b>SPACE</b><span>dash (brief invulnerability)</span>
+    <b>E</b><span>talk</span>
+    <b>MOUSE L</b><span>slash</span>
+    <b>MOUSE R</b><span>guard · tap to parry</span>
+    <b>SPACE</b><span>dash</span>
     <b>M / P</b><span>mute · pause</span>
   </div>
-  <div id="mobileNote">Touch device detected. This build wants a keyboard and a mouse; it will load, but the duel won't be kind.</div>
-  <div id="photoNote">Heads up: this game uses flashing lights and glitch effects. If you are sensitive to flashing imagery, switch on the option below.</div>
-  <label id="fxRow"><input type="checkbox" id="fxToggle"> REDUCE FLASHING &amp; GLITCH</label>
+  <div id="mobileNote">Built for keyboard and mouse. It runs on touch, but the duel will fight you.</div>
+  <div id="photoNote">Flashing lights and glitch effects ahead. Sensitive to flashing? Switch this on.</div>
+  <label id="fxRow"><input type="checkbox" id="fxToggle"> REDUCE FLASHING</label>
   <button id="btnStart">JACK IN</button>
-  <div class="credit">AN ORIGINAL HOMAGE TO NEAL STEPHENSON'S “SNOW CRASH” · NO TEXT FROM THE NOVEL APPEARS HERE</div>
 </div>
 
 <div id="hud">
@@ -31,11 +29,11 @@
   <div id="bossWrap"><div id="bossName">NULLSCROLL // VISUAL DAEMON</div><div class="bar"><i id="bossFill"></i></div></div>
   <div id="speedBox"><div id="speedNum">0</div><div id="speedUnit">KM/H · THE STREET</div></div>
   <div id="turboBox"><div class="tag">TURBO</div><div class="bar"><i id="turboFill"></i></div></div>
-  <div id="hpBox"><div class="tag">AVATAR INTEGRITY</div><div class="bar"><i id="hpFill"></i></div></div>
+  <div id="hpBox"><div class="tag">INTEGRITY</div><div class="bar"><i id="hpFill"></i></div></div>
   <div id="comboTag">×0</div>
   <div id="prompt"><b>[E]</b> <span id="promptTxt">TALK</span></div>
   <div id="hintToast"></div>
-  <div id="muteTag">M · SOUND ON</div>
+  <div id="muteTag">SOUND ON</div>
 </div>
 
 <div id="dialog">
@@ -52,7 +50,7 @@
 
 <div id="screenWin" class="screen">
   <h2>DAEMON PURGED</h2>
-  <div class="line">The scroll tears itself into dead pixels. Somewhere, a few thousand strangers keep partying and never know how close it got. The Street stays loud.</div>
+  <div class="line">The scroll tears into dead pixels. The Street never noticed. It stays loud, and you stay yourself.</div>
   <div class="grade" id="gradeTag">A</div>
   <div class="stats" id="statsWin"></div>
   <div class="btnRow"><button id="btnFree" class="ghost">FREE RIDE</button><button id="btnAgainW">RUN IT AGAIN</button></div>
@@ -60,7 +58,7 @@
 
 <div id="screenDead" class="screen">
   <h2>SIGNAL LOST</h2>
-  <div class="line">Your avatar folds into wireframe and the Street keeps moving without you. Out in the real world, you blink at a goggle screen full of snow. Try again.</div>
+  <div class="line">Your avatar folds to wireframe and the Street rides on without you. You wake to a screen full of snow.</div>
   <div class="stats" id="statsDead"></div>
   <div class="btnRow"><button id="btnAgainD">REBOOT AVATAR</button></div>
 </div>

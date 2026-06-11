@@ -125,7 +125,7 @@ function goFreeRide(){
   AudioSys.setMode('street');
   flashFx('#19e3ff', 0.25);
   setPhase('ride');
-  showHint('THE STREET IS YOURS · NO DESTINATION · M MUTES, P PAUSES', 5);
+  showHint('FREE RIDE · NO DESTINATION', 4);
 }
 
 /* =================== BOOT =================== */
@@ -137,7 +137,7 @@ function start(){
   AudioSys.unlock();
   AudioSys.setMode('street');
   fullReset();
-  showHint('HOLD W TO RIDE · SHIFT FOR TURBO · SLOW DOWN NEAR AVATARS AND TAP E', 6);
+  showHint('HOLD W TO RIDE · SHIFT FOR TURBO', 5, true);
 }
 els.btnStart.addEventListener('click', start);
 window.addEventListener('keydown', ev=>{ if(ev.code === 'Enter' && state.phase === 'title') start(); });

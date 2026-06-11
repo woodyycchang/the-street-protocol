@@ -148,28 +148,26 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 <div id="stage"></div>
 
 <div id="boot">
-  <div class="eyebrow">LINK://METAVERSE — THE STREET — NIGHT, ALWAYS</div>
+  <div class="eyebrow">THE STREET — NIGHT, ALWAYS</div>
   <h1 data-t="STREET PROTOCOL">STREET <b>PROTOCOL</b></h1>
   <div class="lore">
-    The Street: a hundred meters wide, wrapped around a black planet, lit by other people's money.
-    Tonight a virus is loose on it. A scroll of static that crashes the <em>mind</em> behind the avatar.<br>
-    You have a motorcycle, a katana, and a reputation. Ride.
+    A virus is loose on the Street. It rides in as a scroll of static and crashes the mind behind the avatar.<br>
+    You have a bike and a blade.
   </div>
   <div id="controls">
     <b>W / S</b><span>throttle · brake</span>
-    <b>A / D</b><span>lean (ride) · strafe (duel)</span>
+    <b>A / D</b><span>lean · strafe</span>
     <b>SHIFT</b><span>turbo</span>
-    <b>E</b><span>talk to avatars</span>
-    <b>MOUSE L</b><span>katana slash</span>
-    <b>MOUSE R</b><span>guard — tap as a glyph lands to PARRY</span>
-    <b>SPACE</b><span>dash (brief invulnerability)</span>
+    <b>E</b><span>talk</span>
+    <b>MOUSE L</b><span>slash</span>
+    <b>MOUSE R</b><span>guard · tap to parry</span>
+    <b>SPACE</b><span>dash</span>
     <b>M / P</b><span>mute · pause</span>
   </div>
-  <div id="mobileNote">Touch device detected. This build wants a keyboard and a mouse; it will load, but the duel won't be kind.</div>
-  <div id="photoNote">Heads up: this game uses flashing lights and glitch effects. If you are sensitive to flashing imagery, switch on the option below.</div>
-  <label id="fxRow"><input type="checkbox" id="fxToggle"> REDUCE FLASHING &amp; GLITCH</label>
+  <div id="mobileNote">Built for keyboard and mouse. It runs on touch, but the duel will fight you.</div>
+  <div id="photoNote">Flashing lights and glitch effects ahead. Sensitive to flashing? Switch this on.</div>
+  <label id="fxRow"><input type="checkbox" id="fxToggle"> REDUCE FLASHING</label>
   <button id="btnStart">JACK IN</button>
-  <div class="credit">AN ORIGINAL HOMAGE TO NEAL STEPHENSON'S “SNOW CRASH” · NO TEXT FROM THE NOVEL APPEARS HERE</div>
 </div>
 
 <div id="hud">
@@ -177,11 +175,11 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   <div id="bossWrap"><div id="bossName">NULLSCROLL // VISUAL DAEMON</div><div class="bar"><i id="bossFill"></i></div></div>
   <div id="speedBox"><div id="speedNum">0</div><div id="speedUnit">KM/H · THE STREET</div></div>
   <div id="turboBox"><div class="tag">TURBO</div><div class="bar"><i id="turboFill"></i></div></div>
-  <div id="hpBox"><div class="tag">AVATAR INTEGRITY</div><div class="bar"><i id="hpFill"></i></div></div>
+  <div id="hpBox"><div class="tag">INTEGRITY</div><div class="bar"><i id="hpFill"></i></div></div>
   <div id="comboTag">×0</div>
   <div id="prompt"><b>[E]</b> <span id="promptTxt">TALK</span></div>
   <div id="hintToast"></div>
-  <div id="muteTag">M · SOUND ON</div>
+  <div id="muteTag">SOUND ON</div>
 </div>
 
 <div id="dialog">
@@ -198,7 +196,7 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 
 <div id="screenWin" class="screen">
   <h2>DAEMON PURGED</h2>
-  <div class="line">The scroll tears itself into dead pixels. Somewhere, a few thousand strangers keep partying and never know how close it got. The Street stays loud.</div>
+  <div class="line">The scroll tears into dead pixels. The Street never noticed. It stays loud, and you stay yourself.</div>
   <div class="grade" id="gradeTag">A</div>
   <div class="stats" id="statsWin"></div>
   <div class="btnRow"><button id="btnFree" class="ghost">FREE RIDE</button><button id="btnAgainW">RUN IT AGAIN</button></div>
@@ -206,7 +204,7 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 
 <div id="screenDead" class="screen">
   <h2>SIGNAL LOST</h2>
-  <div class="line">Your avatar folds into wireframe and the Street keeps moving without you. Out in the real world, you blink at a goggle screen full of snow. Try again.</div>
+  <div class="line">Your avatar folds to wireframe and the Street rides on without you. You wake to a screen full of snow.</div>
   <div class="stats" id="statsDead"></div>
   <div class="btnRow"><button id="btnAgainD">REBOOT AVATAR</button></div>
 </div>
@@ -410,7 +408,7 @@ const AudioSys = (function(){
   };
 })();
 function toggleMute(){ state.muted = !state.muted; AudioSys.setMuted(state.muted);
-  els.muteTag.textContent = state.muted ? 'M · SOUND OFF' : 'M · SOUND ON'; }
+  els.muteTag.textContent = state.muted ? 'SOUND OFF' : 'SOUND ON'; }
 
 /* =================== RENDERER / SCENE =================== */
 const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
@@ -888,32 +886,29 @@ function addSpecial(def){
 }
 addSpecial({ id:'archive', kind:'daemon', name:'ARCHIVE://STREET', tierTag:'INFO-DAEMON · PUBLIC SERVICE',
   x: 44, z: -58, lines: [
-  'Welcome back to the Street. A hundred meters wide, sixty-five thousand kilometers around, and it never closes.',
-  'Everything here is rendered. The road, the ads, me. The only real thing on the Street tonight is attention.',
-  'Advice, free of charge: your bike has a turbo on SHIFT. The meter refills while you behave yourself.',
-  'One more thing. A courier is handing out free samples in front of Club Eclipse. Nothing on this Street is free. Ride careful.' ]});
+  'Welcome back to the Street. It never closes.',
+  'Everything here is rendered. The road, the ads, me. Only attention is real.',
+  'Hold SHIFT for turbo. And a courier near the club is handing out free samples. Nothing here is free.' ]});
 addSpecial({ id:'vesper', kind:'avatar', tier:'custom', hue:0.86, name:'VESPER.exe', tierTag:'CUSTOM BUILD · 21,907 POLYS',
   x: -50, z: -800, face: Math.PI/2, lines: [
-  'Watch the paint. This body took my shop six weeks. The hair alone is four thousand polygons and it renders in any weather.',
-  'You can read anyone out here by their avatar. Custom work means money or talent. Off the rack means neither. Black and white means a coin-fed terminal in a bus station somewhere.',
-  'Headed to Eclipse? The line is long and the list is short. Lucky for you, the trouble out front skips the line.' ]});
+  'Watch the paint. Six weeks of shop time, and it renders in any weather.',
+  'You can read anyone by their build. Custom means money or talent. Off the rack means neither.' ]});
 addSpecial({ id:'clones', kind:'avatar', tier:'retail', name:'RETAILBODY №844 (×2)', tierTag:'OFF-THE-RACK · STANDARD WALK CYCLE',
   x: -50, z: -1100, face: Math.PI/2, lines: [
-  'Yes. We noticed. Same face, same jacket. He bought the RetailBody bundle. I also bought the RetailBody bundle.',
-  'It shipped with three walk cycles and one smile. We are saving up for custom. Everyone is saving up for custom.' ]});
+  'Yes. Same face. We both bought the same bundle.',
+  'Three walk cycles, one smile. Everyone is saving up for custom.' ]});
 (function cloneTwin(){ // the second, identical one, standing right next to the first
   const t = makeAvatar('retail'); t.grp.position.set(-50.9, 0, -1101.2); t.grp.rotation.y = Math.PI/2 + 0.2;
   crowdG.add(t.grp); walkers.push({ av:t, x:-50.9, z:-1101.2, dir:0, speed:0, shimT:0, pinned:true });
 })();
 addSpecial({ id:'gargoyle', kind:'avatar', tier:'custom', hue:0.55, name:'GARGOYLE.9', tierTag:'WEARABLE RIG · ALWAYS RECORDING',
   x: 50, z: -1500, face: -Math.PI/2, lines: [
-  'Mind the lenses. I record everything out here and sell the interesting parts. Tonight, everything is interesting.',
-  'Two blocks of my feed went to snow near Eclipse. Avatars walked in sharp and walked out wrong. I am staying right here.' ]});
+  'Mind the lenses. I record everything and sell the good parts.',
+  'My feed went to snow near the club. People walked in sharp and walked out wrong.' ]});
 addSpecial({ id:'trio', kind:'avatar', tier:'terminal', name:'BOOTH RENTERS (×3)', tierTag:'PUBLIC TERMINAL · B/W · 12 FPS',
   x: 50, z: -2000, face: -Math.PI/2, lines: [
-  'Don\u2019t l\u2592ugh. The booth eats coins and renders us in grayscale. Still beats not jacking in at all.',
-  'Some guy by the club promised free upgrades. Full color, he said. Roj\u2592n went to look an hour ago. He hasn\u2019t m\u2592ved since.',
-  'If you see Rojan down there... he\u2019s the one standing very, very still.' ]});
+  'Don\u2019t l\u2592ugh. The booth renders us in grayscale. Beats not jacking in.',
+  'Some guy promised free upgrades. Roj\u2592n went to look an hour ago. He hasn\u2019t m\u2592ved since.' ]});
 (function trioExtras(){
   const a = makeAvatar('terminal'), b = makeAvatar('terminal');
   a.grp.position.set(50.8, 0, -2001.4); a.grp.rotation.y = -Math.PI/2 - 0.25;
@@ -925,16 +920,16 @@ addSpecial({ id:'trio', kind:'avatar', tier:'terminal', name:'BOOTH RENTERS (×3
 addSpecial({ id:'doorman', kind:'avatar', tier:'custom', hue:0.08, name:'DOORMAN.SYS', tierTag:'CUSTOM BUILD · CLUB STAFF',
   x: 0, z: -2984.5, face: Math.PI, lines: [
   'List is closed. Club is full. Street is free.',
-  'And whatever that courier by the bikes is handing out, the club\u2019s lawyers say we never saw him.' ]});
+  'That courier by the bikes? We never saw him.' ]});
 addSpecial({ id:'kid', kind:'avatar', tier:'terminal', name:'ROJAN?', tierTag:'PUBLIC TERMINAL · B/W · SIGNAL THIN',
   x: -9, z: -2930, face: Math.PI*0.75, lines: [
-  'I\u2019m not in the line. I just like the music through the wall. The bass renders fine in grayscale.',
-  'The courier showed me his scroll. I only saw the corner of it. I keep... seeing the corner of it.' ]});
+  'I\u2019m not in line. I just like the bass through the wall.',
+  'The courier showed me the scroll. Just the corner. I keep... seeing the corner.' ]});
 const courier = addSpecial({ id:'courier', kind:'avatar', tier:'custom', hue:0.0, name:'COURIER://6A', tierTag:'??? · SIGNAL DIRTY',
   x: 4, z: -2926, face: Math.PI*0.9, special:'courier', lines: [
-  'Hey. Nice bike. Nice reflexes. You look like somebody who appreciates free things.',
-  'It\u2019s a little art piece. A scroll. You look at it, it looks at you, and everybody gets upgraded. One look. That\u2019s all it takes.',
-  'No? Shame. The scroll doesn\u2019t really do \u201cno\u201d.' ]});
+  'Nice bike. Nice reflexes. You look like someone who takes the free thing.',
+  'One look at the scroll and you wake up upgraded. No more questions. Everyone says yes.',
+  'No? The scroll doesn\u2019t take no.' ]});
 courier.av.visorRef = null;
 (function clubQueue(){ // bodies in line outside the rope
   for(let i=0;i<7;i++){
@@ -1891,7 +1886,11 @@ function updateOverlays(dt){
     if(state.hintT <= 0) els.hintToast.classList.remove('on');
   }
 }
-function showHint(txt, dur){
+const _hintSeen = new Set();
+function showHint(txt, dur, once){
+  // expertise-reversal: tutorial hints flagged `once` show only the first time
+  // they would fire this session; on replay the experienced player isn't re-taught.
+  if(once){ if(_hintSeen.has(txt)) return; _hintSeen.add(txt); }
   els.hintToast.textContent = txt;
   els.hintToast.classList.add('on');
   state.hintT = dur || 3.5;
@@ -2031,7 +2030,7 @@ function updateArrive(dt){
     player.yaw = Math.PI*0.9;
     player.grp.position.copy(player.pos);
     setPhase('plaza');
-    showHint('ON FOOT NOW · SOMEONE BY THE BIKES WANTS A WORD · E TO TALK', 5);
+    showHint('ON FOOT · PRESS E TO TALK', 4);
   }
 }
 function updatePlaza(dt){
@@ -2070,7 +2069,7 @@ function updateIntro(dt){
   if(t >= 3.4){
     setPhase('duel');
     state.stats.duelT0 = state.time;
-    showHint('TAP RIGHT MOUSE AS A GLYPH LANDS — A PARRY SENDS IT BACK', 5);
+    showHint('TAP RIGHT MOUSE AS A GLYPH LANDS TO PARRY', 4, true);
   }
 }
 function updateDuel(dt){
@@ -2083,7 +2082,7 @@ function updateDuel(dt){
   state.stats.duelT = state.time - state.stats.duelT0;
   if(player.hp <= 35 && !state._lowHpHinted){
     state._lowHpHinted = true;
-    showHint('SLASH THE WISPS — SOME DROP INTEGRITY SHARDS', 4);
+    showHint('SLASH WISPS FOR SHARDS', 3, true);
   }
   if(boss.dead){
     setPhase('win');
@@ -2315,7 +2314,7 @@ function goFreeRide(){
   AudioSys.setMode('street');
   flashFx('#19e3ff', 0.25);
   setPhase('ride');
-  showHint('THE STREET IS YOURS · NO DESTINATION · M MUTES, P PAUSES', 5);
+  showHint('FREE RIDE · NO DESTINATION', 4);
 }
 
 /* =================== BOOT =================== */
@@ -2327,7 +2326,7 @@ function start(){
   AudioSys.unlock();
   AudioSys.setMode('street');
   fullReset();
-  showHint('HOLD W TO RIDE · SHIFT FOR TURBO · SLOW DOWN NEAR AVATARS AND TAP E', 6);
+  showHint('HOLD W TO RIDE · SHIFT FOR TURBO', 5, true);
 }
 els.btnStart.addEventListener('click', start);
 window.addEventListener('keydown', ev=>{ if(ev.code === 'Enter' && state.phase === 'title') start(); });

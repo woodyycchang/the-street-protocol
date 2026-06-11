@@ -102,6 +102,37 @@ console.log('   run card: attempt ' + attempt + ' | duel ' + fin.stats.duelT.toF
             ' km/h | met ' + fin.stats.talks + ' | grade ' + gradeEl);
 ok(won && ['S','A','B','C'].includes(gradeEl), 'a win earns a real grade', gradeEl);
 
+console.log('== expertise reversal: tutorial hints fade on replay ==');
+{
+  const toast = W.document.getElementById('hintToast');
+  const fresh = boot();
+  const G2 = fresh.GAME, D2 = fresh.window.document, T2 = D2.getElementById('hintToast');
+  const fight = require('./bot');
+  G2.seed(777); G2.start();
+  const clear2 = () => { T2.textContent = ''; T2.classList.remove('on'); };
+  const toDuel = () => {
+    G2.debug.warp(8, -2875); for (let i = 0; i < 2; i++) G2.update(1/60);
+    for (let i = 0; i < 210; i++) G2.update(1/60);
+    G2.debug.warp(2.8, -2924.5); for (let i = 0; i < 4; i++) G2.update(1/60);
+    for (const k of ['w','a','s','d','shift','space','e','lmb','rmb']) G2.input[k] = false;
+    G2.input.e = true; G2.update(1/60); G2.update(1/60); G2.input.e = false; G2.update(1/60); G2.update(1/60);
+    let g = 0; while (G2.state.phase === 'chat' && g++ < 10) { G2.input.e = true; G2.update(1/60); G2.update(1/60); G2.input.e = false; G2.update(1/60); G2.update(1/60); }
+    for (let i = 0; i < 60 * 5; i++) { G2.update(1/60); if (G2.state.phase === 'duel') break; }
+  };
+  toDuel();
+  let seen1 = false;
+  for (let i = 0; i < 60; i++) { if (/PARRY/.test(T2.textContent)) seen1 = true; G2.update(1/60); }
+  ok(seen1, 'first duel teaches the parry');
+  const m2 = {}; let f2 = 0;
+  while (f2++ < 60 * 360) { const ss = fight(G2, m2); if (ss.phase === 'win' || ss.phase === 'dead') break; G2.update(1/60); }
+  for (const k of ['w','a','s','d','shift','space','e','lmb','rmb']) G2.input[k] = false;
+  G2.reset(); clear2();
+  toDuel();
+  let seen2 = false;
+  for (let i = 0; i < 60; i++) { if (/PARRY/.test(T2.textContent)) seen2 = true; G2.update(1/60); }
+  ok(!seen2, 'replay does not re-teach the experienced player');
+}
+
 console.log('== 30Hz frame-rate independence ==');
 G.reset(); G.seed(555);
 G.input.w = true; sec(5, 1/30); G.input.w = false;

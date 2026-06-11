@@ -83,6 +83,20 @@ fired = false;
 for (let i = 0; i < 60 * 6; i++) if (G.debug.perfTick(33)) fired = true;
 ok(!fired, 'degrade fires only once');
 
+console.log('== text: research-backed minimalism ==');
+// scope checks to the title-screen markup, not the embedded vendor lib
+// (three.js is full of "Matrix4" etc., unrelated to the film)
+const bootHtml = html.slice(0, html.indexOf('<script id="vendor-three">'));
+// startup screen no longer names any source work (user decision)
+ok(!/SNOW CRASH|STEPHENSON|GIBSON|NEUROMANCER|WACHOWSKI/i.test(bootHtml), 'no source-work credit on the title screen');
+// marketese stripped from the lore line (NN/G: objective beats promotional)
+ok(!/sixty-five thousand|other people's money/i.test(bootHtml), 'promotional lore copy removed');
+// courier keeps the refusal beat in original words, no film quotes (apostrophe may be a unicode char)
+ok(/scroll doesn.{0,8}t take no/i.test(html), 'courier refusal line present and original');
+// the showHint signature carries the `once` flag (expertise-reversal mechanism)
+ok(/function showHint\(txt, dur, once\)/.test(html), 'showHint supports once-only hints');
+ok(/_hintSeen/.test(html), 'once-hint dedupe set present');
+
 console.log('== version ==');
 ok(G.debug.version === '1.0.0', 'version exposed', G.debug.version);
 ok(/STREET PROTOCOL/.test(html.match(/<title>([^<]*)<\/title>/)[1]), 'title intact');

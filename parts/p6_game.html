@@ -28,7 +28,11 @@ function updateOverlays(dt){
     if(state.hintT <= 0) els.hintToast.classList.remove('on');
   }
 }
-function showHint(txt, dur){
+const _hintSeen = new Set();
+function showHint(txt, dur, once){
+  // expertise-reversal: tutorial hints flagged `once` show only the first time
+  // they would fire this session; on replay the experienced player isn't re-taught.
+  if(once){ if(_hintSeen.has(txt)) return; _hintSeen.add(txt); }
   els.hintToast.textContent = txt;
   els.hintToast.classList.add('on');
   state.hintT = dur || 3.5;
@@ -168,7 +172,7 @@ function updateArrive(dt){
     player.yaw = Math.PI*0.9;
     player.grp.position.copy(player.pos);
     setPhase('plaza');
-    showHint('ON FOOT NOW · SOMEONE BY THE BIKES WANTS A WORD · E TO TALK', 5);
+    showHint('ON FOOT · PRESS E TO TALK', 4);
   }
 }
 function updatePlaza(dt){
@@ -207,7 +211,7 @@ function updateIntro(dt){
   if(t >= 3.4){
     setPhase('duel');
     state.stats.duelT0 = state.time;
-    showHint('TAP RIGHT MOUSE AS A GLYPH LANDS — A PARRY SENDS IT BACK', 5);
+    showHint('TAP RIGHT MOUSE AS A GLYPH LANDS TO PARRY', 4, true);
   }
 }
 function updateDuel(dt){
@@ -220,7 +224,7 @@ function updateDuel(dt){
   state.stats.duelT = state.time - state.stats.duelT0;
   if(player.hp <= 35 && !state._lowHpHinted){
     state._lowHpHinted = true;
-    showHint('SLASH THE WISPS — SOME DROP INTEGRITY SHARDS', 4);
+    showHint('SLASH WISPS FOR SHARDS', 3, true);
   }
   if(boss.dead){
     setPhase('win');

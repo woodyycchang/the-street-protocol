@@ -134,32 +134,29 @@ function addSpecial(def){
 }
 addSpecial({ id:'archive', kind:'daemon', name:'ARCHIVE://STREET', tierTag:'INFO-DAEMON · PUBLIC SERVICE',
   x: 44, z: -58, lines: [
-  'Welcome back to the Street. A hundred meters wide, sixty-five thousand kilometers around, and it never closes.',
-  'Everything here is rendered. The road, the ads, me. The only real thing on the Street tonight is attention.',
-  'Advice, free of charge: your bike has a turbo on SHIFT. The meter refills while you behave yourself.',
-  'One more thing. A courier is handing out free samples in front of Club Eclipse. Nothing on this Street is free. Ride careful.' ]});
+  'Welcome back to the Street. It never closes.',
+  'Everything here is rendered. The road, the ads, me. Only attention is real.',
+  'Hold SHIFT for turbo. And a courier near the club is handing out free samples. Nothing here is free.' ]});
 addSpecial({ id:'vesper', kind:'avatar', tier:'custom', hue:0.86, name:'VESPER.exe', tierTag:'CUSTOM BUILD · 21,907 POLYS',
   x: -50, z: -800, face: Math.PI/2, lines: [
-  'Watch the paint. This body took my shop six weeks. The hair alone is four thousand polygons and it renders in any weather.',
-  'You can read anyone out here by their avatar. Custom work means money or talent. Off the rack means neither. Black and white means a coin-fed terminal in a bus station somewhere.',
-  'Headed to Eclipse? The line is long and the list is short. Lucky for you, the trouble out front skips the line.' ]});
+  'Watch the paint. Six weeks of shop time, and it renders in any weather.',
+  'You can read anyone by their build. Custom means money or talent. Off the rack means neither.' ]});
 addSpecial({ id:'clones', kind:'avatar', tier:'retail', name:'RETAILBODY №844 (×2)', tierTag:'OFF-THE-RACK · STANDARD WALK CYCLE',
   x: -50, z: -1100, face: Math.PI/2, lines: [
-  'Yes. We noticed. Same face, same jacket. He bought the RetailBody bundle. I also bought the RetailBody bundle.',
-  'It shipped with three walk cycles and one smile. We are saving up for custom. Everyone is saving up for custom.' ]});
+  'Yes. Same face. We both bought the same bundle.',
+  'Three walk cycles, one smile. Everyone is saving up for custom.' ]});
 (function cloneTwin(){ // the second, identical one, standing right next to the first
   const t = makeAvatar('retail'); t.grp.position.set(-50.9, 0, -1101.2); t.grp.rotation.y = Math.PI/2 + 0.2;
   crowdG.add(t.grp); walkers.push({ av:t, x:-50.9, z:-1101.2, dir:0, speed:0, shimT:0, pinned:true });
 })();
 addSpecial({ id:'gargoyle', kind:'avatar', tier:'custom', hue:0.55, name:'GARGOYLE.9', tierTag:'WEARABLE RIG · ALWAYS RECORDING',
   x: 50, z: -1500, face: -Math.PI/2, lines: [
-  'Mind the lenses. I record everything out here and sell the interesting parts. Tonight, everything is interesting.',
-  'Two blocks of my feed went to snow near Eclipse. Avatars walked in sharp and walked out wrong. I am staying right here.' ]});
+  'Mind the lenses. I record everything and sell the good parts.',
+  'My feed went to snow near the club. People walked in sharp and walked out wrong.' ]});
 addSpecial({ id:'trio', kind:'avatar', tier:'terminal', name:'BOOTH RENTERS (×3)', tierTag:'PUBLIC TERMINAL · B/W · 12 FPS',
   x: 50, z: -2000, face: -Math.PI/2, lines: [
-  'Don\u2019t l\u2592ugh. The booth eats coins and renders us in grayscale. Still beats not jacking in at all.',
-  'Some guy by the club promised free upgrades. Full color, he said. Roj\u2592n went to look an hour ago. He hasn\u2019t m\u2592ved since.',
-  'If you see Rojan down there... he\u2019s the one standing very, very still.' ]});
+  'Don\u2019t l\u2592ugh. The booth renders us in grayscale. Beats not jacking in.',
+  'Some guy promised free upgrades. Roj\u2592n went to look an hour ago. He hasn\u2019t m\u2592ved since.' ]});
 (function trioExtras(){
   const a = makeAvatar('terminal'), b = makeAvatar('terminal');
   a.grp.position.set(50.8, 0, -2001.4); a.grp.rotation.y = -Math.PI/2 - 0.25;
@@ -171,16 +168,16 @@ addSpecial({ id:'trio', kind:'avatar', tier:'terminal', name:'BOOTH RENTERS (×3
 addSpecial({ id:'doorman', kind:'avatar', tier:'custom', hue:0.08, name:'DOORMAN.SYS', tierTag:'CUSTOM BUILD · CLUB STAFF',
   x: 0, z: -2984.5, face: Math.PI, lines: [
   'List is closed. Club is full. Street is free.',
-  'And whatever that courier by the bikes is handing out, the club\u2019s lawyers say we never saw him.' ]});
+  'That courier by the bikes? We never saw him.' ]});
 addSpecial({ id:'kid', kind:'avatar', tier:'terminal', name:'ROJAN?', tierTag:'PUBLIC TERMINAL · B/W · SIGNAL THIN',
   x: -9, z: -2930, face: Math.PI*0.75, lines: [
-  'I\u2019m not in the line. I just like the music through the wall. The bass renders fine in grayscale.',
-  'The courier showed me his scroll. I only saw the corner of it. I keep... seeing the corner of it.' ]});
+  'I\u2019m not in line. I just like the bass through the wall.',
+  'The courier showed me the scroll. Just the corner. I keep... seeing the corner.' ]});
 const courier = addSpecial({ id:'courier', kind:'avatar', tier:'custom', hue:0.0, name:'COURIER://6A', tierTag:'??? · SIGNAL DIRTY',
   x: 4, z: -2926, face: Math.PI*0.9, special:'courier', lines: [
-  'Hey. Nice bike. Nice reflexes. You look like somebody who appreciates free things.',
-  'It\u2019s a little art piece. A scroll. You look at it, it looks at you, and everybody gets upgraded. One look. That\u2019s all it takes.',
-  'No? Shame. The scroll doesn\u2019t really do \u201cno\u201d.' ]});
+  'Nice bike. Nice reflexes. You look like someone who takes the free thing.',
+  'One look at the scroll and you wake up upgraded. No more questions. Everyone says yes.',
+  'No? The scroll doesn\u2019t take no.' ]});
 courier.av.visorRef = null;
 (function clubQueue(){ // bodies in line outside the rope
   for(let i=0;i<7;i++){
