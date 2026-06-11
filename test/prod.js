@@ -20,29 +20,24 @@ const { GAME: G, window: W } = boot();
 const document = W.document;
 const step = (n, dt) => { for (let i = 0; i < n; i++) G.update(dt || 1/60); };
 
-console.log('== reduce-flash mode ==');
-const cb = document.getElementById('fxToggle');
-cb.checked = true;
-cb.dispatchEvent(new W.Event('change', { bubbles: true }));
-ok(G.state.reduceFx === true, 'toggle sets the state flag');
+console.log('== reduce-flash: zero-UI, OS preference only ==');
+// engine damping still works, driven purely by state
+G.state.reduceFx = true;
 G.state.glitch = 0; G.debug.glitch(1.0);
 ok(Math.abs(G.state.glitch - 0.35) < 1e-9, 'glitch spikes are damped to 35%', G.state.glitch);
-cb.checked = false; cb.dispatchEvent(new W.Event('change', { bubbles: true }));
+G.state.reduceFx = false;
 G.state.glitch = 0; G.debug.glitch(1.0);
 ok(G.state.glitch === 1, 'full glitch when the mode is off', G.state.glitch);
-
-console.log('== reduce-flash: simplicity pass ==');
-// the wordy warning sentence is gone; the one-line control remains (minimalism floor)
-ok(!document.getElementById('photoNote'), 'photo-warning sentence removed');
-ok(!!document.getElementById('fxToggle'), 'reduce-flashing control kept');
-// OS-level prefers-reduced-motion auto-enables the mode with zero UI
+// the title screen carries no flash-related UI at all (user decision)
+ok(!document.getElementById('photoNote'), 'photo-warning sentence absent');
+ok(!document.getElementById('fxToggle'), 'reduce-flashing checkbox absent');
+// the OS-level prefers-reduced-motion preference still auto-enables the mode, invisibly
 {
   const fresh = boot({ preBoot: w => {
     w.matchMedia = q => ({ matches: /prefers-reduced-motion:\s*reduce/.test(q),
                            addListener(){}, removeListener(){}, addEventListener(){}, removeEventListener(){} });
   }});
   ok(fresh.GAME.state.reduceFx === true, 'prefers-reduced-motion auto-enables reduce-flash');
-  ok(fresh.window.document.getElementById('fxToggle').checked === true, 'checkbox reflects the auto-enabled state');
 }
 G.state.glitch = 0;
 
